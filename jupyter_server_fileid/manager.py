@@ -447,7 +447,7 @@ class FileIdManager(LoggingConfigurable):
         self.con.execute("DELETE FROM Files WHERE path = ?", (path,))
         self.con.commit()
 
-    def _cleanup(self):
+    def __del__(self):
         """Cleans up `FileIdManager` by committing any pending transactions and
         closing the connection."""
         self.con.commit()
