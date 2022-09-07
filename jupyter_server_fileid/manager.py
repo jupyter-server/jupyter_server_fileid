@@ -1,8 +1,7 @@
 import os
 import sqlite3
 import stat
-from collections import deque
-from typing import Deque, Optional
+from typing import Optional
 
 from jupyter_core.paths import jupyter_data_dir
 from traitlets import TraitError, Unicode, validate
@@ -49,6 +48,8 @@ class FileIdManager(LoggingConfigurable):
     def __init__(self, **kwargs):
         # pass args and kwargs to parent Configurable
         super().__init__(**kwargs)
+        # initialize instance attrs
+        self._update_cursor = False
         # initialize connection with db
         self.con = sqlite3.connect(self.db_path)
         self.log.debug("FileIdManager : Configured root dir: %s" % self.root_dir)
@@ -94,17 +95,19 @@ class FileIdManager(LoggingConfigurable):
                     self._index_dir_recursively(entry.path, self._stat(entry.path))
         scan_iter.close()
 
-    def _sync_all(self):
+    def _sync_all(self, id=None):
         """
         Syncs Files table with the filesystem and ensures that the correct path
         is associated with each file ID. Does so by iterating through all
         indexed directories and syncing the contents of all dirty directories.
 
+        Parameters
+        ----------
         Notes
         -----
         A dirty directory is a directory that is either:
         - unindexed
-        - indexed but with different `mtime`
+        - indexed but with different mtime
 
         Dirty directories contain possibly indexed but moved files as children.
         Hence we need to call _sync_file() on their contents via _sync_dir().
@@ -112,30 +115,39 @@ class FileIdManager(LoggingConfigurable):
         body.  Unindexed dirty directories are handled immediately when
         encountered in _sync_dir().
 
-        sync_deque is an additional deque of directories that should be checked
-        for dirtiness, and is appended to whenever _sync_file() encounters an
-        indexed directory that was moved out-of-band. This is necessary because
-        the SELECT query is not guaranteed to include the new paths following
-        the move.
+        If a directory was indexed-but-moved, the existing cursor may contain
+        records with the old paths rather than the new paths updated by
+        _sync_file(). Hence the cursor needs to be redefined if
+        self._update_cursor is set to True by _sync_file().
         """
-        sync_deque: Deque = deque()
         cursor = self.con.execute("SELECT id, path, mtime FROM Files WHERE is_dir = 1")
+        self._update_cursor = False
         dir = cursor.fetchone()
+
         while dir:
             id, path, old_mtime = dir
             stat_info = self._stat(path)
 
             # ignores directories that no longer exist
-            if stat_info is not None:
-                new_mtime = stat_info.mtime
-                dir_dirty = new_mtime != old_mtime
-                if dir_dirty:
-                    self._sync_dir(path, sync_deque)
-                    self._update(id, stat_info)
+            if stat_info is None:
+                dir = cursor.fetchone()
+                continue
 
-            dir = sync_deque.popleft() if sync_deque else cursor.fetchone()
+            new_mtime = stat_info.mtime
+            dir_dirty = new_mtime != old_mtime
 
-    def _sync_dir(self, dir_path, sync_deque):
+            if dir_dirty:
+                self._sync_dir(path)
+                self._update(id, stat_info)
+
+            # check if cursor should be updated
+            if self._update_cursor:
+                self._update_cursor = False
+                cursor = self.con.execute("SELECT id, path, mtime FROM Files WHERE is_dir = 1")
+
+            dir = cursor.fetchone()
+
+    def _sync_dir(self, dir_path):
         """
         Syncs the contents of a directory. If a child directory is dirty because
         it is unindexed, then the contents of that child directory are synced.
@@ -145,25 +157,22 @@ class FileIdManager(LoggingConfigurable):
         ----------
         dir_path : string
             Path of the directory to sync contents of.
-
-        sync_deque: deque
-            Deque of directory records to be checked for dirtiness in
             _sync_all().
         """
         with os.scandir(dir_path) as scan_iter:
             for entry in scan_iter:
                 stat_info = self._stat(entry.path)
-                id = self._sync_file(entry.path, stat_info, sync_deque)
+                id = self._sync_file(entry.path, stat_info)
 
                 # if entry is unindexed directory, create new record and sync
                 # contents recursively.
                 if stat_info.is_dir and id is None:
                     self._create(entry.path, stat_info)
-                    self._sync_dir(entry.path, sync_deque)
+                    self._sync_dir(entry.path)
 
         scan_iter.close()
 
-    def _sync_file(self, path, stat_info, sync_deque=None):
+    def _sync_file(self, path, stat_info):
         """
         Syncs the file at `path` with the Files table by detecting whether the
         file was previously indexed but moved. Updates the record with the new
@@ -179,16 +188,17 @@ class FileIdManager(LoggingConfigurable):
         stat_info : StatStruct
             Stat info of the file to sync.
 
-        sync_deque : deque, optional
-            Deque of directory records to be checked for dirtiness in
-            _sync_all(). If specified, this method appends to sync_deque any
-            moved indexed directory and all of its children recursively.
-
         Returns
         -------
         id : int, optional
             ID of the file if it is a real file (not a symlink) and it was
             previously indexed. None otherwise.
+
+        Notes
+        -----
+        Sets `self._update_cursor` to `True` if a directory was
+        indexed-but-moved to signal `_sync_all()` to update its cursor and
+        retrieve the new paths.
         """
         # if file is symlink, do nothing
         if stat_info.is_symlink:
@@ -207,15 +217,15 @@ class FileIdManager(LoggingConfigurable):
         dst_timestamp = stat_info.crtime if stat_info.crtime is not None else stat_info.mtime
 
         # if record has identical ino and crtime/mtime to an existing record,
-        # update it with new destination path and stat info, returning its id
+        # update it with new path, returning its id
         if src_timestamp == dst_timestamp:
-            self._update_with_path(id, stat_info, path)
+            self._update(id, path=path)
 
-            # update paths of indexed children under moved directories
+            # update paths of indexed children under moved directories and set
+            # self._update_cursor to True
             if stat_info.is_dir and old_path != path:
-                self._move_recursive(old_path, path, sync_deque)
-                if sync_deque is not None:
-                    sync_deque.appendleft((id, path, src_mtime))
+                self._move_recursive(old_path, path)
+                self._update_cursor = True
 
             return id
 
@@ -272,24 +282,33 @@ class FileIdManager(LoggingConfigurable):
 
         return cursor.lastrowid
 
-    def _update_with_path(self, id, stat_info, path):
-        """Same as _update(), but accepts and updates path."""
-        self.con.execute(
-            "UPDATE Files SET path = ?, ino = ?, crtime = ?, mtime = ? WHERE id = ?",
-            (path, stat_info.ino, stat_info.crtime, stat_info.mtime, id),
-        )
-
-    def _update(self, id, stat_info):
+    def _update(self, id, stat_info=None, path=None):
         """Updates a record given its file ID and stat info."""
         # updating `ino` and `crtime` is a conscious design decision because
         # this method is called by `move()`. these values are only preserved by
         # fs moves done via the `rename()` syscall, like `mv`. we don't care how
         # the contents manager moves a file; it could be deleting and creating a
         # new file (which will change the stat info).
-        self.con.execute(
-            "UPDATE Files SET ino = ?, crtime = ?, mtime = ? WHERE id = ?",
-            (stat_info.ino, stat_info.crtime, stat_info.mtime, id),
-        )
+        if stat_info and path:
+            self.con.execute(
+                "UPDATE Files SET ino = ?, crtime = ?, mtime = ?, path = ? WHERE id = ?",
+                (stat_info.ino, stat_info.crtime, stat_info.mtime, path, id),
+            )
+            return
+
+        if stat_info:
+            self.con.execute(
+                "UPDATE Files SET ino = ?, crtime = ?, mtime = ? WHERE id = ?",
+                (stat_info.ino, stat_info.crtime, stat_info.mtime, id),
+            )
+            return
+
+        if path:
+            self.con.execute(
+                "UPDATE Files SET path = ? WHERE id = ?",
+                (path, id),
+            )
+            return
 
     def index(self, path, stat_info=None, commit=True):
         """Returns the file ID for the file at `path`, creating a new file ID if
@@ -343,26 +362,20 @@ class FileIdManager(LoggingConfigurable):
 
         return path
 
-    def _move_recursive(self, old_path, new_path, sync_deque=None):
+    def _move_recursive(self, old_path, new_path):
         """Updates path of all indexed files prefixed with `old_path` and
-        replaces the prefix with `new_path`. If `sync_deque` is specified, moved
-        indexed directories are appended to `sync_deque`."""
+        replaces the prefix with `new_path`."""
         old_path_glob = os.path.join(old_path, "*")
         records = self.con.execute(
-            "SELECT id, path, mtime FROM Files WHERE path GLOB ?", (old_path_glob,)
+            "SELECT id, path FROM Files WHERE path GLOB ?", (old_path_glob,)
         ).fetchall()
 
         for record in records:
-            id, old_recpath, mtime = record
+            id, old_recpath = record
             new_recpath = os.path.join(new_path, os.path.relpath(old_recpath, start=old_path))
-            stat_info = self._stat(new_recpath)
-            if not stat_info:
-                continue
 
-            self._update_with_path(id, stat_info, new_recpath)
-
-            if sync_deque is not None and stat_info.is_dir:
-                sync_deque.append((id, new_recpath, mtime))
+            # only update path, not stat info
+            self._update(id, path=new_recpath)
 
     def move(self, old_path, new_path, recursive=False):
         """Handles file moves by updating the file path of the associated file
@@ -390,9 +403,8 @@ class FileIdManager(LoggingConfigurable):
             return id
         else:
             # update existing record with new path and stat info
-            # TODO: make sure is_dir for existing record matches that of file at new_path
             id = row[0]
-            self._update_with_path(id, stat_info, new_path)
+            self._update(id, stat_info, new_path)
             self.con.commit()
             return id
 
