@@ -1,8 +1,8 @@
 import json
 
-from jupyter_server.extension.handler import ExtensionHandlerMixin
-from jupyter_server.base.handlers import APIHandler
 import tornado
+from jupyter_server.base.handlers import APIHandler
+from jupyter_server.extension.handler import ExtensionHandlerMixin
 
 
 class PingHandler(ExtensionHandlerMixin, APIHandler):
@@ -15,6 +15,4 @@ class PingHandler(ExtensionHandlerMixin, APIHandler):
 
     @tornado.web.authenticated
     def get(self):
-        self.finish(json.dumps({
-            "ping_response": self.ping_response
-        }))
+        self.finish(json.dumps({"ping_response": self.ping_response}))
