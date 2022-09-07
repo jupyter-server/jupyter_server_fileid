@@ -450,5 +450,6 @@ class FileIdManager(LoggingConfigurable):
     def __del__(self):
         """Cleans up `FileIdManager` by committing any pending transactions and
         closing the connection."""
-        self.con.commit()
-        self.con.close()
+        if hasattr(self, "con"):
+            self.con.commit()
+            self.con.close()
