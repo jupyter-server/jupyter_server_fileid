@@ -1,7 +1,9 @@
 """A Jupyter Server extension providing an implementation of the File ID service."""
 from .extension import FileIdExtension
 
-__version__ = "0.1.0"
+
+version_info = (0, 1, 0, "", "")
+__version__ = ".".join(map(str, version_info[:3])) + "".join(version_info[3:])
 
 
 def _jupyter_server_extension_points():
