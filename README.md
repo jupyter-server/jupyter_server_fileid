@@ -1,6 +1,6 @@
 # jupyter_server_fileid
 
-[![Github Actions Status](https://github.com/github_username/jupyter_server_fileid/workflows/Build/badge.svg)](https://github.com/github_username/jupyter_server_fileid/actions/workflows/build.yml)
+[![Github Actions Status](https://github.com/jupyter-server/jupyter_server_fileid/workflows/Build/badge.svg)](https://github.com/jupyter-server/jupyter_server_fileid/actions/workflows/build.yml)
 
 A Jupyter Server extension providing an implementation of the File ID service.
 

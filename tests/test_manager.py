@@ -162,12 +162,12 @@ def test_getters_oob_delete(fid_manager, test_path):
     id = fid_manager.index(test_path)
     os.rmdir(test_path)
     assert id is not None
-    assert fid_manager.get_id(test_path) == None
-    assert fid_manager.get_path(id) == None
+    assert fid_manager.get_id(test_path) is None
+    assert fid_manager.get_path(id) is None
 
 
 def test_get_id_unindexed(fid_manager, test_path_child):
-    assert fid_manager.get_id(test_path_child) == None
+    assert fid_manager.get_id(test_path_child) is None
 
 
 # test out-of-band move detection for FIM.get_id()
@@ -296,7 +296,7 @@ def test_move_indexed(fid_manager, old_path, new_path):
     new_id = fid_manager.move(old_path, new_path)
 
     assert old_id == new_id
-    assert fid_manager.get_id(old_path) == None
+    assert fid_manager.get_id(old_path) is None
     assert fid_manager.get_id(new_path) == new_id
     assert fid_manager.get_path(old_id) == new_path
 
