@@ -58,3 +58,4 @@ repos:
         files: ^\.github/workflows/
         types: [yaml]
         args: ["--schemafile", "https://json.schemastore.org/github-workflow"]
+        stages: [manual]
