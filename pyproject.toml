@@ -86,10 +86,6 @@ version_template = '({major}, {minor}, {patch}, "{channel}", "{release}")'
 
 [[tool.tbump.file]]
 src = "pyproject.toml"
-version_template = 'current = "{major}.{minor}.{patch}{channel}{release}"'
-
-[[tool.tbump.file]]
-src = "pyproject.toml"
 version_template = 'version = "{major}.{minor}.{patch}{channel}{release}"'
 
 [[tool.tbump.field]]
