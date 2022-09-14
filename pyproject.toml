@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "jupyter_server_fileid"
 authors = [{name = "David L. Qiu", email = "david@qiu.dev"}]
-dynamic = ["version"]
+version = "0.2.0"
 readme = "README.md"
 requires-python = ">=3.7"
 keywords = ["Jupyter", "Extension"]
@@ -32,9 +32,6 @@ file="LICENSE"
 
 [project.urls]
 Home = "https://github.com/github_username/jupyter_server_fileid"
-
-[tool.hatch.version]
-path = "jupyter_server_fileid/__init__.py"
 
 [tool.hatch.build.targets.wheel.shared-data]
 "jupyter-config" = "etc/jupyter"
@@ -86,6 +83,10 @@ tag_template = "v{new_version}"
 [[tool.tbump.file]]
 src = "jupyter_server_fileid/__init__.py"
 version_template = '({major}, {minor}, {patch}, "{channel}", "{release}")'
+
+[[tool.tbump.file]]
+src = "pyproject.toml"
+version_template = 'version = "{major}.{minor}.{patch}{channel}{release}"'
 
 [[tool.tbump.field]]
 name = "channel"
