@@ -6,6 +6,9 @@ on:
   schedule:
     - cron: "0 8 * * *"
 
+env:
+  JUPYTER_PLATFORM_DIRS: "1"
+
 jobs:
   pytest:
     name: Pytest
