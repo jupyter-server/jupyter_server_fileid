@@ -348,14 +348,25 @@ def test_copy(fid_manager, old_path, new_path):
     assert old_id != new_id
 
 
-def test_copy_recursive(fid_manager, old_path, old_path_child, new_path, new_path_child):
+def test_copy_recursive(
+    fid_manager,
+    old_path,
+    old_path_child,
+    old_path_grandchild,
+    new_path,
+    new_path_child,
+    new_path_grandchild,
+):
     fid_manager.index(old_path)
     fid_manager.index(old_path_child)
+    fid_manager.index(old_path_grandchild)
 
     shutil.copytree(old_path, new_path)
     fid_manager.copy(old_path, new_path)
 
+    assert fid_manager.get_id(new_path) is not None
     assert fid_manager.get_id(new_path_child) is not None
+    assert fid_manager.get_id(new_path_grandchild) is not None
 
 
 def test_delete(fid_manager, test_path):

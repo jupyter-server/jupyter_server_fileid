@@ -449,7 +449,7 @@ class FileIdManager(LoggingConfigurable):
                 if not record:
                     continue
                 (from_recpath,) = record
-                to_recpath = os.path.join(to_path, os.path.basename(from_recpath))
+                to_recpath = os.path.join(to_path, os.path.relpath(from_recpath, start=from_path))
                 stat_info = self._stat(to_recpath)
                 if not stat_info:
                     continue
