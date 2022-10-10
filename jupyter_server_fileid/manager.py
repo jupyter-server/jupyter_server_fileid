@@ -16,6 +16,23 @@ class StatStruct:
     is_symlink: bool
 
 
+def log(log_before, log_after):
+    """Decorator that accepts two functions which build a log string to be
+    logged to INFO before and after the target method executes. The functions
+    are passed all the arguments that the method was passed."""
+
+    def decorator(method):
+        def wrapped(self, *args, **kwargs):
+            self.log.info(log_before(self, *args, **kwargs))
+            ret = method(self, *args, **kwargs)
+            self.log.info(log_after(self, *args, **kwargs))
+            return ret
+
+        return wrapped
+
+    return decorator
+
+
 class FileIdManager(LoggingConfigurable):
     """
     Manager that supports tracks files across their lifetime by associating
@@ -52,9 +69,9 @@ class FileIdManager(LoggingConfigurable):
         self._update_cursor = False
         # initialize connection with db
         self.con = sqlite3.connect(self.db_path)
-        self.log.debug("FileIdManager : Configured root dir: %s" % self.root_dir)
-        self.log.debug("FileIdManager : Configured database path: %s" % self.db_path)
-        self.log.debug("FileIdManager : Creating File ID tables and indices")
+        self.log.info("FileIdManager : Configured root dir: %s" % self.root_dir)
+        self.log.info("FileIdManager : Configured database path: %s" % self.db_path)
+        self.log.info("FileIdManager : Creating File ID tables and indices")
         self.con.execute(
             "CREATE TABLE IF NOT EXISTS Files("
             "id INTEGER PRIMARY KEY AUTOINCREMENT, "
@@ -377,7 +394,11 @@ class FileIdManager(LoggingConfigurable):
             # only update path, not stat info
             self._update(id, path=new_recpath)
 
-    def move(self, old_path, new_path, recursive=False):
+    @log(
+        lambda self, old_path, new_path: f"Updating index following move from {old_path} to {new_path}.",
+        lambda self, old_path, new_path: f"Successfully updated index following move from {old_path} to {new_path}.",
+    )
+    def move(self, old_path, new_path):
         """Handles file moves by updating the file path of the associated file
         ID.  Returns the file ID. Returns None if file does not exist at new_path."""
         old_path = self._normalize_path(old_path)
@@ -388,9 +409,7 @@ class FileIdManager(LoggingConfigurable):
         if stat_info is None:
             return None
 
-        self.log.debug(f"FileIdManager : Moving file from ${old_path} to ${new_path}")
-
-        if recursive:
+        if stat_info.is_dir:
             self._move_recursive(old_path, new_path)
 
         # attempt to fetch ID associated with old path
@@ -408,7 +427,11 @@ class FileIdManager(LoggingConfigurable):
             self.con.commit()
             return id
 
-    def copy(self, from_path, to_path, recursive=False):
+    @log(
+        lambda self, from_path, to_path: f"Indexing {to_path} following copy from {from_path}.",
+        lambda self, from_path, to_path: f"Successfully indexed {to_path} following copy from {from_path}.",
+    )
+    def copy(self, from_path, to_path):
         """Handles file copies by creating a new record in the Files table.
         Returns the file ID associated with `new_path`. Also indexes `old_path`
         if record does not exist in Files table. TODO: emit to event bus to
@@ -416,9 +439,8 @@ class FileIdManager(LoggingConfigurable):
         the new file ID."""
         from_path = self._normalize_path(from_path)
         to_path = self._normalize_path(to_path)
-        self.log.debug(f"FileIdManager : Copying file from ${from_path} to ${to_path}")
 
-        if recursive:
+        if os.path.isdir(to_path):
             from_path_glob = os.path.join(from_path, "*")
             records = self.con.execute(
                 "SELECT path FROM Files WHERE path GLOB ?", (from_path_glob,)
@@ -427,7 +449,7 @@ class FileIdManager(LoggingConfigurable):
                 if not record:
                     continue
                 (from_recpath,) = record
-                to_recpath = os.path.join(to_path, os.path.basename(from_recpath))
+                to_recpath = os.path.join(to_path, os.path.relpath(from_recpath, start=from_path))
                 stat_info = self._stat(to_recpath)
                 if not stat_info:
                     continue
@@ -446,13 +468,16 @@ class FileIdManager(LoggingConfigurable):
         # transaction committed in index()
         return self.index(to_path)
 
-    def delete(self, path, recursive=False):
+    @log(
+        lambda self, path: f"Deleting index at {path}.",
+        lambda self, path: f"Successfully deleted index at {path}.",
+    )
+    def delete(self, path):
         """Handles file deletions by deleting the associated record in the File
         table. Returns None."""
         path = self._normalize_path(path)
-        self.log.debug(f"FileIdManager : Deleting file {path}")
 
-        if recursive:
+        if os.path.isdir(path):
             path_glob = os.path.join(path, "*")
             self.con.execute("DELETE FROM Files WHERE path GLOB ?", (path_glob,))
 
