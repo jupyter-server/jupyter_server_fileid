@@ -24,8 +24,9 @@ def log(log_before, log_after):
     def decorator(method):
         def wrapped(self, *args, **kwargs):
             self.log.info(log_before(self, *args, **kwargs))
-            method(self, *args, **kwargs)
+            ret = method(self, *args, **kwargs)
             self.log.info(log_after(self, *args, **kwargs))
+            return ret
 
         return wrapped
 
