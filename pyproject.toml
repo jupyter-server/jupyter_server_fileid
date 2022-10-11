@@ -28,6 +28,13 @@ test = [
   "jupyter_server[test]~=2.0.0rc1"
 ]
 
+cli = [
+  "click"
+]
+
+[project.scripts]
+jupyter-fileid = "jupyter_server_fileid.cli:main"
+
 [project.license]
 file="LICENSE"
 
