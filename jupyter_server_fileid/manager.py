@@ -16,6 +16,9 @@ class StatStruct:
     is_symlink: bool
 
 
+default_db_path = os.path.join(jupyter_data_dir(), "file_id_manager.db")
+
+
 def log(log_before, log_after):
     """Decorator that accepts two functions which build a log string to be
     logged to INFO before and after the target method executes. The functions
@@ -54,7 +57,7 @@ class FileIdManager(LoggingConfigurable):
     )
 
     db_path = Unicode(
-        default_value=os.path.join(jupyter_data_dir(), "file_id_manager.db"),
+        default_value=default_db_path,
         help=(
             "The path of the DB file used by `FileIdManager`. "
             "Defaults to `jupyter_data_dir()/file_id_manager.db`."

@@ -28,6 +28,13 @@ test = [
   "jupyter_server[test]~=2.0.0rc1"
 ]
 
+cli = [
+  "click"
+]
+
+[project.scripts]
+jupyter-fileid = "jupyter_server_fileid.cli:main"
+
 [project.license]
 file="LICENSE"
 
@@ -47,12 +54,6 @@ profile = "black"
 addopts = "-raXs --durations 10 --color=yes --doctest-modules"
 testpaths = [
     "tests/"
-]
-filterwarnings = [
-  "error",
-  "ignore:There is no current event loop:DeprecationWarning",
-  "module:make_current is deprecated:DeprecationWarning",
-  "module:clear_current is deprecated:DeprecationWarning",
 ]
 
 [tool.jupyter_releaser]
