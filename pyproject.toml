@@ -55,12 +55,6 @@ addopts = "-raXs --durations 10 --color=yes --doctest-modules"
 testpaths = [
     "tests/"
 ]
-filterwarnings = [
-  "error",
-  "ignore:There is no current event loop:DeprecationWarning",
-  "module:make_current is deprecated:DeprecationWarning",
-  "module:clear_current is deprecated:DeprecationWarning",
-]
 
 [tool.jupyter_releaser]
 skip = ["check-links"]
