@@ -38,7 +38,7 @@ def log(log_before, log_after):
 
 class FileIdManager(LoggingConfigurable):
     """
-    Manager that supports tracks files across their lifetime by associating
+    Manager that supports tracking files across their lifetime by associating
     each with a unique file ID, which is maintained across filesystem operations.
 
     Notes
@@ -65,15 +65,15 @@ class FileIdManager(LoggingConfigurable):
         config=True,
     )
 
-    def __init__(self, **kwargs):
+    def __init__(self, *args, **kwargs):
         # pass args and kwargs to parent Configurable
-        super().__init__(**kwargs)
+        super().__init__(*args, **kwargs)
         # initialize instance attrs
         self._update_cursor = False
         # initialize connection with db
         self.con = sqlite3.connect(self.db_path)
-        self.log.info("FileIdManager : Configured root dir: %s" % self.root_dir)
-        self.log.info("FileIdManager : Configured database path: %s" % self.db_path)
+        self.log.info(f"FileIdManager : Configured root dir: {self.root_dir}")
+        self.log.info(f"FileIdManager : Configured database path: {self.db_path}")
         self.log.info("FileIdManager : Creating File ID tables and indices")
         self.con.execute(
             "CREATE TABLE IF NOT EXISTS Files("
@@ -96,9 +96,9 @@ class FileIdManager(LoggingConfigurable):
     @validate("root_dir", "db_path")
     def _validate_abspath_traits(self, proposal):
         if proposal["value"] is None:
-            raise TraitError("FileIdManager : %s must not be None" % proposal["trait"].name)
+            raise TraitError(f"FileIdManager : {proposal['trait'].name} must not be None")
         if not os.path.isabs(proposal["value"]):
-            raise TraitError("FileIdManager : %s must be an absolute path" % proposal["trait"].name)
+            raise TraitError(f"FileIdManager : {proposal['trait'].name} must be an absolute path")
         return self._normalize_path(proposal["value"])
 
     def _index_all(self):
@@ -113,16 +113,13 @@ class FileIdManager(LoggingConfigurable):
             for entry in scan_iter:
                 if entry.is_dir():
                     self._index_dir_recursively(entry.path, self._stat(entry.path))
-        scan_iter.close()
 
-    def _sync_all(self, id=None):
+    def _sync_all(self):
         """
         Syncs Files table with the filesystem and ensures that the correct path
         is associated with each file ID. Does so by iterating through all
         indexed directories and syncing the contents of all dirty directories.
 
-        Parameters
-        ----------
         Notes
         -----
         A dirty directory is a directory that is either:
@@ -132,7 +129,7 @@ class FileIdManager(LoggingConfigurable):
         Dirty directories contain possibly indexed but moved files as children.
         Hence we need to call _sync_file() on their contents via _sync_dir().
         Indexed directories with mtime difference are handled in this method
-        body.  Unindexed dirty directories are handled immediately when
+        body. Unindexed dirty directories are handled immediately when
         encountered in _sync_dir().
 
         If a directory was indexed-but-moved, the existing cursor may contain
@@ -283,7 +280,7 @@ class FileIdManager(LoggingConfigurable):
         return stat_info
 
     def _stat(self, path):
-        """Returns stat info on a path in a StatStruct object.Returns None if
+        """Returns stat info on a path in a StatStruct object. Returns None if
         file does not exist at path."""
         try:
             raw_stat = os.lstat(path)
@@ -305,8 +302,8 @@ class FileIdManager(LoggingConfigurable):
     def _update(self, id, stat_info=None, path=None):
         """Updates a record given its file ID and stat info."""
         # updating `ino` and `crtime` is a conscious design decision because
-        # this method is called by `move()`. these values are only preserved by
-        # fs moves done via the `rename()` syscall, like `mv`. we don't care how
+        # this method is called by `move()`. These values are only preserved by
+        # fs moves done via the `rename()` syscall, like `mv`. We don't care how
         # the contents manager moves a file; it could be deleting and creating a
         # new file (which will change the stat info).
         if stat_info and path:
