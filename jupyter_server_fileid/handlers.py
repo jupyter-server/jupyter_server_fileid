@@ -1,17 +1,15 @@
-from tornado import web
-
 from jupyter_server.auth import authorized
 from jupyter_server.base.handlers import APIHandler
-
+from tornado import web
 
 AUTH_RESOURCE = "contents"
+
 
 class FileIdAPIHandler(APIHandler):
     auth_resource = AUTH_RESOURCE
 
 
 class FileIdHandler(FileIdAPIHandler):
-
     @web.authenticated
     @authorized
     async def get(self, path):
