@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 
 import pytest
 
@@ -36,3 +37,55 @@ def fid_manager(fid_db_path, jp_root_dir):
     # also makes tests run faster :)
     fid_manager.con.execute("PRAGMA journal_mode = OFF")
     return fid_manager
+
+
+@pytest.fixture
+def fs_helpers(fid_manager):
+    class FsHelpers:
+        # seconds after test start that the `touch` and `move` methods set
+        # timestamps to
+        fake_time = 1
+
+        def touch(self, path, dir=False):
+            """Creates a new file at `path`. The modified time and birth time of the
+            file are guaranteed to be unique. The modified time of the parent directory
+            is guaranteed to be equal to that of the new file."""
+            if dir:
+                os.mkdir(path)
+            else:
+                Path(path).touch()
+
+            parent = Path(path).parent
+            stat = os.stat(path)
+            current_time = stat.st_mtime + self.fake_time
+
+            os.utime(parent, (stat.st_atime, current_time))
+            os.utime(path, (current_time, current_time))
+
+            # fake new file birth time via overriding stat method
+            stat_real = fid_manager._stat
+
+            def stat_stub(input_path):
+                stat = stat_real(input_path)
+                if input_path == path:
+                    stat.crtime = current_time
+                return stat
+
+            fid_manager._stat = stat_stub
+
+            self.fake_time += 1
+
+        def move(self, old_path, new_path):
+            """Moves a file from `old_path` to `new_path` while changing the modified
+            timestamp of the parent directory accordingly. The modified time of the
+            parent is guaranteed to be unique."""
+            os.rename(old_path, new_path)
+            parent = Path(new_path).parent
+            stat = os.stat(parent)
+            current_time = stat.st_mtime + self.fake_time
+
+            os.utime(parent, (stat.st_atime, current_time))
+
+            self.fake_time += 1
+
+    return FsHelpers()
