@@ -75,6 +75,8 @@ class FileIdManager(LoggingConfigurable):
         self.log.info(f"FileIdManager : Configured root dir: {self.root_dir}")
         self.log.info(f"FileIdManager : Configured database path: {self.db_path}")
         self.log.info("FileIdManager : Creating File ID tables and indices")
+        # do not allow reads to block writes. required when using multiple processes
+        self.con.execute("PRAGMA journal_mode = WAL")
         self.con.execute(
             "CREATE TABLE IF NOT EXISTS Files("
             "id INTEGER PRIMARY KEY AUTOINCREMENT, "
@@ -137,12 +139,12 @@ class FileIdManager(LoggingConfigurable):
         _sync_file(). Hence the cursor needs to be redefined if
         self._update_cursor is set to True by _sync_file().
         """
-        cursor = self.con.execute("SELECT id, path, mtime FROM Files WHERE is_dir = 1")
+        cursor = self.con.execute("SELECT path, mtime FROM Files WHERE is_dir = 1")
         self._update_cursor = False
         dir = cursor.fetchone()
 
         while dir:
-            id, path, old_mtime = dir
+            path, old_mtime = dir
             stat_info = self._stat(path)
 
             # ignores directories that no longer exist
@@ -155,12 +157,15 @@ class FileIdManager(LoggingConfigurable):
 
             if dir_dirty:
                 self._sync_dir(path)
-                self._update(id, stat_info)
+                # prefer index over _sync_file() as it ensures directory is
+                # stored back into the Files table in the case of `mtime`
+                # mismatch, which results in deleting the old record.
+                self.index(path, stat_info, commit=False)
 
             # check if cursor should be updated
             if self._update_cursor:
                 self._update_cursor = False
-                cursor = self.con.execute("SELECT id, path, mtime FROM Files WHERE is_dir = 1")
+                cursor = self.con.execute("SELECT path, mtime FROM Files WHERE is_dir = 1")
 
             dir = cursor.fetchone()
 
@@ -291,7 +296,14 @@ class FileIdManager(LoggingConfigurable):
 
     def _create(self, path, stat_info):
         """Creates a record given its path and stat info. Returns the new file
-        ID."""
+        ID.
+
+        Notes
+        -----
+        - Because of the uniqueness constraint on `ino`, this method is
+        dangerous and may throw a runtime error if the file is not guaranteed to
+        have a unique `ino`.
+        """
         cursor = self.con.execute(
             "INSERT INTO Files (path, ino, crtime, mtime, is_dir) VALUES (?, ?, ?, ?, ?)",
             (path, stat_info.ino, stat_info.crtime, stat_info.mtime, stat_info.is_dir),
@@ -300,12 +312,20 @@ class FileIdManager(LoggingConfigurable):
         return cursor.lastrowid
 
     def _update(self, id, stat_info=None, path=None):
-        """Updates a record given its file ID and stat info."""
-        # updating `ino` and `crtime` is a conscious design decision because
-        # this method is called by `move()`. These values are only preserved by
-        # fs moves done via the `rename()` syscall, like `mv`. We don't care how
-        # the contents manager moves a file; it could be deleting and creating a
-        # new file (which will change the stat info).
+        """Updates a record given its file ID and stat info.
+
+        Notes
+        -----
+        - Updating `ino` and `crtime` is a conscious design decision because
+        this method is called by `move()`. These values are only preserved by
+        fs moves done via the `rename()` syscall, like `mv`. We don't care how
+        the contents manager moves a file; it could be deleting and creating a
+        new file (which will change the stat info).
+
+        - Because of the uniqueness constraint on `ino`, this method is
+        dangerous and may throw a runtime error if the file is not guaranteed to
+        have a unique `ino`.
+        """
         if stat_info and path:
             self.con.execute(
                 "UPDATE Files SET ino = ?, crtime = ?, mtime = ?, path = ? WHERE id = ?",

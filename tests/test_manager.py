@@ -70,6 +70,21 @@ def get_path_nosync(fid_manager, id):
     return row and row[0]
 
 
+move_counter = 1
+
+
+def move(old_path, new_path):
+    """Moves a file from `old_path` to `new_path` while changing the modified
+    timestamp of the parent directory accordingly. The modified timestamp of the
+    parent is guaranteed to change per invocation."""
+    global move_counter
+    os.rename(old_path, new_path)
+    parent = Path(new_path).parent
+    stat = os.stat(parent)
+    os.utime(parent, (stat.st_atime, stat.st_mtime + move_counter))
+    move_counter += 1
+
+
 def test_validates_root_dir(fid_db_path):
     with pytest.raises(TraitError, match="must be an absolute path"):
         FileIdManager(root_dir=os.path.join("some", "rel", "path"), db_path=fid_db_path)
@@ -107,6 +122,34 @@ def test_index_oob_move(fid_manager, old_path, new_path):
     id = fid_manager.index(old_path)
     os.rename(old_path, new_path)
     assert fid_manager.index(new_path) == id
+
+
+def test_index_after_deleting_dir_in_same_path(fid_manager, test_path, jp_root_dir):
+    old_id = fid_manager.index(test_path)
+    stat = os.stat(test_path)
+
+    os.rmdir(test_path)
+    os.mkdir(test_path)
+    os.utime(test_path, ns=(stat.st_atime_ns, stat.st_mtime_ns + 1000))
+    new_id = fid_manager.index(test_path)
+
+    assert old_id != new_id
+    assert fid_manager.get_path(old_id) is None
+    assert fid_manager.get_path(new_id) == test_path
+
+
+def test_index_after_deleting_regfile_in_same_path(fid_manager, test_path_child):
+    old_id = fid_manager.index(test_path_child)
+    stat = os.stat(test_path_child)
+
+    os.remove(test_path_child)
+    Path(test_path_child).touch()
+    os.utime(test_path_child, ns=(stat.st_atime_ns, stat.st_mtime_ns + 1000))
+    new_id = fid_manager.index(test_path_child)
+
+    assert old_id != new_id
+    assert fid_manager.get_path(old_id) is None
+    assert fid_manager.get_path(new_id) == test_path_child
 
 
 @pytest.fixture
@@ -234,6 +277,15 @@ def test_get_path_oob_move_into_unindexed(
     os.rename(old_path_child, new_path_child)
 
     assert fid_manager.get_path(id) == new_path_child
+
+
+def test_get_path_oob_move_back_to_original_path(fid_manager, old_path, new_path):
+    id = fid_manager.index(old_path)
+    move(old_path, new_path)
+
+    assert fid_manager.get_path(id) == new_path
+    move(new_path, old_path)
+    assert fid_manager.get_path(id) == old_path
 
 
 # move file into an indexed-but-moved directory
