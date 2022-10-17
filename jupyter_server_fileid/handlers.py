@@ -10,7 +10,6 @@ class FileIdAPIHandler(APIHandler):
 
 
 class FilePath2IdHandler(FileIdAPIHandler):
-
     @web.authenticated
     @authorized
     async def get(self, path):
@@ -45,8 +44,8 @@ class FilePath2IdHandler(FileIdAPIHandler):
         self.set_status(201)
         return self.finish(str(idx))
 
-class FileId2PathHandler(FileIdAPIHandler):
 
+class FileId2PathHandler(FileIdAPIHandler):
     @web.authenticated
     @authorized
     async def get(self, idx):

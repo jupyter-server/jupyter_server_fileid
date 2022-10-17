@@ -4,7 +4,7 @@ from traitlets import Type, default
 
 from jupyter_server_fileid.manager import FileIdManager
 
-from .handlers import FilePath2IdHandler, FileId2PathHandler
+from .handlers import FileId2PathHandler, FilePath2IdHandler
 
 
 class FileIdExtension(ExtensionApp):
@@ -57,6 +57,6 @@ class FileIdExtension(ExtensionApp):
                 (
                     r"/api/fileid/path/(.*)",
                     FileId2PathHandler,
-                )
+                ),
             ],
         )
