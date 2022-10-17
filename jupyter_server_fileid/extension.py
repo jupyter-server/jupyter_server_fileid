@@ -4,6 +4,8 @@ from traitlets import Type, default
 
 from jupyter_server_fileid.manager import FileIdManager
 
+from .handlers import FileId2PathHandler, FilePath2IdHandler
+
 
 class FileIdExtension(ExtensionApp):
 
@@ -43,4 +45,18 @@ class FileIdExtension(ExtensionApp):
         self.settings["event_logger"].add_listener(
             schema_id="https://events.jupyter.org/jupyter_server/contents_service/v1",
             listener=cm_listener,
+        )
+
+    def initialize_handlers(self):
+        self.handlers.extend(
+            [
+                (
+                    r"/api/fileid/id/(.*)",
+                    FilePath2IdHandler,
+                ),
+                (
+                    r"/api/fileid/path/(.*)",
+                    FileId2PathHandler,
+                ),
+            ],
         )
