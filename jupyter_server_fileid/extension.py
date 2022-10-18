@@ -37,7 +37,7 @@ class FileIdExtension(ExtensionApp):
         # define event handlers per contents manager action
         handlers_by_action = {
             "get": None,
-            "save": None,
+            "save": lambda data: file_id_manager.save(data["path"]),
             "rename": lambda data: file_id_manager.move(data["source_path"], data["path"]),
             "copy": lambda data: file_id_manager.copy(data["source_path"], data["path"]),
             "delete": lambda data: file_id_manager.delete(data["path"]),

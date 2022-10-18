@@ -420,3 +420,12 @@ def test_delete_recursive(fid_manager, test_path, test_path_child):
     fid_manager.delete(test_path)
 
     assert fid_manager.get_id(test_path_child) is None
+
+
+def test_save(fid_manager, test_path, fs_helpers):
+    id = fid_manager.index(test_path)
+
+    fs_helpers.edit(test_path)
+    fid_manager.save(test_path)
+
+    assert fid_manager.get_id(test_path) == id

@@ -40,7 +40,7 @@ def fid_manager(fid_db_path, jp_root_dir):
 
 
 @pytest.fixture
-def fs_helpers(fid_manager):
+def fs_helpers():
     class FsHelpers:
         # seconds after test start that the `touch` and `move` methods set
         # timestamps to
@@ -74,6 +74,14 @@ def fs_helpers(fid_manager):
 
             os.utime(parent, (stat.st_atime, current_time))
 
+            self.fake_time += 1
+
+        def edit(self, path):
+            """Simulates editing a file at `path` by updating its modified time
+            accordingly.  The modified time of the file is guaranteed to be
+            unique."""
+            stat = os.stat(path)
+            os.utime(path, (stat.st_atime, stat.st_mtime + self.fake_time))
             self.fake_time += 1
 
     return FsHelpers()
