@@ -194,6 +194,23 @@ class FileIdManager(LoggingConfigurable):
 
         scan_iter.close()
 
+    def _check_timestamps(self, stat_info):
+        """Returns True if the timestamps of a file match those recorded in the
+        Files table. Returns False otherwise."""
+
+        src = self.con.execute(
+            "SELECT crtime, mtime FROM Files WHERE ino = ?", (stat_info.ino,)
+        ).fetchone()
+
+        # if no record with matching ino, then return None
+        if not src:
+            return False
+
+        src_crtime, src_mtime = src
+        src_timestamp = src_crtime if src_crtime is not None else src_mtime
+        dst_timestamp = stat_info.crtime if stat_info.crtime is not None else stat_info.mtime
+        return src_timestamp == dst_timestamp
+
     def _sync_file(self, path, stat_info):
         """
         Syncs the file at `path` with the Files table by detecting whether the
@@ -227,34 +244,27 @@ class FileIdManager(LoggingConfigurable):
             return None
 
         src = self.con.execute(
-            "SELECT id, path, crtime, mtime FROM Files WHERE ino = ?", (stat_info.ino,)
+            "SELECT id, path FROM Files WHERE ino = ?", (stat_info.ino,)
         ).fetchone()
 
-        # if no record with matching ino, then return None
-        if not src:
+        # if ino is not in database, return None
+        if src is None:
+            return None
+        id, old_path = src
+
+        # if timestamps don't match, delete existing record and return None
+        if not self._check_timestamps(stat_info):
+            self.con.execute("DELETE FROM Files WHERE id = ?", (id,))
             return None
 
-        id, old_path, src_crtime, src_mtime = src
-        src_timestamp = src_crtime if src_crtime is not None else src_mtime
-        dst_timestamp = stat_info.crtime if stat_info.crtime is not None else stat_info.mtime
+        # otherwise update existing record with new path, moving any indexed
+        # children if necessary. then return its id
+        self._update(id, path=path)
+        if stat_info.is_dir and old_path != path:
+            self._move_recursive(old_path, path)
+            self._update_cursor = True
 
-        # if record has identical ino and crtime/mtime to an existing record,
-        # update it with new path, returning its id
-        if src_timestamp == dst_timestamp:
-            self._update(id, path=path)
-
-            # update paths of indexed children under moved directories and set
-            # self._update_cursor to True
-            if stat_info.is_dir and old_path != path:
-                self._move_recursive(old_path, path)
-                self._update_cursor = True
-
-            return id
-
-        # otherwise delete the existing record with identical `ino`, since inos
-        # must be unique. then return None
-        self.con.execute("DELETE FROM Files WHERE id = ?", (id,))
-        return None
+        return id
 
     def _normalize_path(self, path):
         """Normalizes a given file path."""
@@ -390,11 +400,21 @@ class FileIdManager(LoggingConfigurable):
         longer has a file."""
         self._sync_all()
         self.con.commit()
-        row = self.con.execute("SELECT path FROM Files WHERE id = ?", (id,)).fetchone()
-        path = row and row[0]
+        row = self.con.execute("SELECT path, ino FROM Files WHERE id = ?", (id,)).fetchone()
 
-        # if no record associated with ID or if file no longer exists at path, return None
-        if path is None or self._stat(path) is None:
+        # if no record associated with ID, return None
+        if row is None:
+            return None
+        path, ino = row
+
+        # if file no longer exists at path, return None
+        stat_info = self._stat(path)
+        if stat_info is None:
+            return None
+
+        # if inode numbers or timestamps of the file and record don't match,
+        # return None
+        if ino != stat_info.ino or not self._check_timestamps(stat_info):
             return None
 
         return path
