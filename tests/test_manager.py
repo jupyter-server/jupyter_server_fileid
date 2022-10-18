@@ -109,6 +109,30 @@ def test_index_oob_move(fid_manager, old_path, new_path):
     assert fid_manager.index(new_path) == id
 
 
+def test_index_after_deleting_dir_in_same_path(fid_manager, test_path, fs_helpers):
+    old_id = fid_manager.index(test_path)
+
+    os.rmdir(test_path)
+    fs_helpers.touch(test_path, dir=True)
+    new_id = fid_manager.index(test_path)
+
+    assert old_id != new_id
+    assert fid_manager.get_path(old_id) is None
+    assert fid_manager.get_path(new_id) == test_path
+
+
+def test_index_after_deleting_regfile_in_same_path(fid_manager, test_path_child, fs_helpers):
+    old_id = fid_manager.index(test_path_child)
+
+    os.remove(test_path_child)
+    fs_helpers.touch(test_path_child)
+    new_id = fid_manager.index(test_path_child)
+
+    assert old_id != new_id
+    assert fid_manager.get_path(old_id) is None
+    assert fid_manager.get_path(new_id) == test_path_child
+
+
 @pytest.fixture
 def stub_stat_crtime(fid_manager, request):
     """Fixture that stubs the _stat() method on fid_manager to always return a
@@ -234,6 +258,15 @@ def test_get_path_oob_move_into_unindexed(
     os.rename(old_path_child, new_path_child)
 
     assert fid_manager.get_path(id) == new_path_child
+
+
+def test_get_path_oob_move_back_to_original_path(fid_manager, old_path, new_path, fs_helpers):
+    id = fid_manager.index(old_path)
+    fs_helpers.move(old_path, new_path)
+
+    assert fid_manager.get_path(id) == new_path
+    fs_helpers.move(new_path, old_path)
+    assert fid_manager.get_path(id) == old_path
 
 
 # move file into an indexed-but-moved directory
