@@ -524,6 +524,34 @@ class FileIdManager(LoggingConfigurable):
         self.con.execute("DELETE FROM Files WHERE path = ?", (path,))
         self.con.commit()
 
+    def save(self, path):
+        """Handles file saves (edits) by updating recorded stat info.
+
+        Notes
+        -----
+        - This assumes that the file was present prior to the save event. That
+        means it's technically possible to fool this method by deleting and
+        creating a new file at the same path out-of-band, and then update it via
+        JupyterLab.  This would (wrongly) preserve the association b/w the old
+        file ID and the current path rather than create a new file ID.
+        """
+        path = self._normalize_path(path)
+
+        # look up record by ino and path
+        stat_info = self._stat(path)
+        row = self.con.execute(
+            "SELECT id FROM Files WHERE ino = ? AND path = ?", (stat_info.ino, path)
+        ).fetchone()
+
+        # if no record exists, return early
+        if row is None:
+            return
+
+        # otherwise, update the stat info
+        (id,) = row
+        self._update(id, stat_info)
+        self.con.commit()
+
     def __del__(self):
         """Cleans up `FileIdManager` by committing any pending transactions and
         closing the connection."""
