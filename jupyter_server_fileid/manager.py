@@ -357,6 +357,19 @@ class FileIdManager(LoggingConfigurable):
             )
             return
 
+    def sync_all(self):
+        """
+        Syncs Files table with the filesystem and ensures that the correct path
+        is associated with each file ID. Required to be called manually
+        beforehand if `sync=False` is passed to `get_path()`.
+
+        Notes
+        -----
+        - Identical to `_sync_all()`, but is public and commits the transaction
+        upon invocation. See `_sync_all()` for more implementation details."""
+        self._sync_all()
+        self.con.commit()
+
     def index(self, path, stat_info=None, commit=True):
         """Returns the file ID for the file at `path`, creating a new file ID if
         one does not exist. Returns None only if file does not exist at path."""
@@ -394,12 +407,25 @@ class FileIdManager(LoggingConfigurable):
         self.con.commit()
         return id
 
-    def get_path(self, id):
+    def get_path(self, id, sync=True):
         """Retrieves the file path associated with a file ID. Returns None if
         the ID does not exist in the Files table or if the corresponding path no
-        longer has a file."""
-        self._sync_all()
-        self.con.commit()
+        longer has a file.
+
+        Parameters
+        ----------
+        sync : bool
+            Whether to invoke `sync_all()` automatically prior to ID lookup.
+
+        Notes
+        -----
+        - For performance reasons, if this method must be called multiple times
+        in serial, then it is best to first invoke `sync_all()` and then call
+        this method with the argument `sync=False`.
+        """
+        if sync:
+            self.sync_all()
+
         row = self.con.execute("SELECT path, ino FROM Files WHERE id = ?", (id,)).fetchone()
 
         # if no record associated with ID, return None
