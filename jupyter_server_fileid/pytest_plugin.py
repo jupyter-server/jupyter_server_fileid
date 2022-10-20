@@ -1,4 +1,5 @@
 import os
+import shutil
 from pathlib import Path
 
 import pytest
@@ -40,7 +41,7 @@ def fid_manager(fid_db_path, jp_root_dir):
 
 
 @pytest.fixture
-def fs_helpers():
+def fs_helpers(jp_root_dir):
     class FsHelpers:
         # seconds after test start that the `touch` and `move` methods set
         # timestamps to
@@ -48,7 +49,12 @@ def fs_helpers():
 
         def touch(self, path, dir=False):
             """Creates a new file at `path`. The modified times of the file and
-            its parent directory are guaranteed to be unique."""
+            its parent directory are guaranteed to be unique. If given a
+            relative path, it is assumed to be relative to jp_root_dir.
+            """
+            if not os.path.isabs(path):
+                path = os.path.join(jp_root_dir, path)
+
             if dir:
                 os.mkdir(path)
             else:
@@ -66,7 +72,13 @@ def fs_helpers():
         def move(self, old_path, new_path):
             """Moves a file from `old_path` to `new_path` while changing the modified
             timestamp of the parent directory accordingly. The modified time of the
-            parent is guaranteed to be unique."""
+            parent is guaranteed to be unique. If given a relative path, it is
+            assumed to be relative to jp_root_dir."""
+            if not os.path.isabs(old_path):
+                old_path = os.path.join(jp_root_dir, old_path)
+            if not os.path.isabs(new_path):
+                new_path = os.path.join(jp_root_dir, new_path)
+
             os.rename(old_path, new_path)
             parent = Path(new_path).parent
             stat = os.stat(parent)
@@ -79,9 +91,57 @@ def fs_helpers():
         def edit(self, path):
             """Simulates editing a file at `path` by updating its modified time
             accordingly.  The modified time of the file is guaranteed to be
-            unique."""
+            unique. If given a relative path, it is assumed to be relative to
+            jp_root_dir."""
+            if not os.path.isabs(path):
+                path = os.path.join(jp_root_dir, path)
+
             stat = os.stat(path)
             os.utime(path, (stat.st_atime, stat.st_mtime + self.fake_time))
+            self.fake_time += 1
+
+        def delete(self, path):
+            """Deletes a file at `path` while changing the modified timestamp of
+            the parent directory accordingly. The modified time of the parent is
+            guaranteed to be unique. If given a relative path, it is assumed to
+            be relative to jp_root_dir."""
+            if not os.path.isabs(path):
+                path = os.path.join(jp_root_dir, path)
+
+            if os.path.isdir(path):
+                shutil.rmtree(path)
+            else:
+                os.remove(path)
+
+            parent = Path(path).parent
+            stat = os.stat(parent)
+            current_time = stat.st_mtime + self.fake_time
+
+            os.utime(parent, (stat.st_atime, current_time))
+
+            self.fake_time += 1
+
+        def copy(self, old_path, new_path):
+            """Copies a file from `old_path` to `new_path` while changing the
+            modified timestamp of the parent directory accordingly. The modified
+            time of the parent is guaranteed to be unique. If given a relative
+            path, it is assumed to be relative to jp_root_dir."""
+            if not os.path.isabs(old_path):
+                old_path = os.path.join(jp_root_dir, old_path)
+            if not os.path.isabs(new_path):
+                new_path = os.path.join(jp_root_dir, new_path)
+
+            if os.path.isdir(old_path):
+                shutil.copytree(old_path, new_path)
+            else:
+                shutil.copyfile(old_path, new_path)
+
+            parent = Path(old_path).parent
+            stat = os.stat(parent)
+            current_time = stat.st_mtime + self.fake_time
+
+            os.utime(parent, (stat.st_atime, current_time))
+
             self.fake_time += 1
 
     return FsHelpers()
