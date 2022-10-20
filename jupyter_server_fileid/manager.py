@@ -408,9 +408,10 @@ class FileIdManager(LoggingConfigurable):
         return id
 
     def get_path(self, id, sync=True):
-        """Retrieves the file path associated with a file ID. Returns None if
-        the ID does not exist in the Files table or if the corresponding path no
-        longer has a file.
+        """Retrieves the file path associated with a file ID. The file path is
+        relative to `self.root_dir`. Returns None if the ID does not
+        exist in the Files table, if the path no longer has a
+        file, or if the path is not a child of `self.root_dir`.
 
         Parameters
         ----------
@@ -443,6 +444,12 @@ class FileIdManager(LoggingConfigurable):
         if ino != stat_info.ino or not self._check_timestamps(stat_info):
             return None
 
+        # if path is not relative to `self.root_dir`, return None.
+        if os.path.commonpath([self.root_dir, path]) != self.root_dir:
+            return None
+
+        # finally, convert the path to a relative one.
+        path = os.path.relpath(path, self.root_dir)
         return path
 
     def _move_recursive(self, old_path, new_path):
