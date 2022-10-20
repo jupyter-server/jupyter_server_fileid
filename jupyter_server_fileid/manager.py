@@ -71,10 +71,11 @@ class FileIdManager(LoggingConfigurable):
         # initialize instance attrs
         self._update_cursor = False
         # initialize connection with db
-        self.con = sqlite3.connect(self.db_path)
         self.log.info(f"FileIdManager : Configured root dir: {self.root_dir}")
         self.log.info(f"FileIdManager : Configured database path: {self.db_path}")
-        self.log.info("FileIdManager : Creating File ID tables and indices")
+        self.con = sqlite3.connect(self.db_path)
+        self.log.info("FileIdManager : Successfully connected to database file.")
+        self.log.info("FileIdManager : Creating File ID tables and indices.")
         # do not allow reads to block writes. required when using multiple processes
         self.con.execute("PRAGMA journal_mode = WAL")
         self.con.execute(
