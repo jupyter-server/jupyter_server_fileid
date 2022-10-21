@@ -24,7 +24,9 @@ class FileIdExtension(ExtensionApp):
 
     def initialize_settings(self):
         self.log.debug(f"Configured File ID manager: {self.file_id_manager_class.__name__}")
-        file_id_manager = self.file_id_manager_class(log=self.log, root_dir=self.serverapp.root_dir)
+        file_id_manager = self.file_id_manager_class(
+            log=self.log, root_dir=self.serverapp.root_dir, config=self.config
+        )
         self.settings.update({"file_id_manager": file_id_manager})
 
         # attach listener to contents manager events (requires jupyter_server~=2)
