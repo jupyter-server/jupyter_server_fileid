@@ -2,6 +2,22 @@
 
 <!-- <START NEW CHANGELOG ENTRY> -->
 
+## 0.4.2
+
+([Full Changelog](https://github.com/jupyter-server/jupyter_server_fileid/compare/v0.4.1...15a183a28eb63741659971585acff9a23be05c18))
+
+### Bugs fixed
+
+- pass self.config to file ID manager class [#23](https://github.com/jupyter-server/jupyter_server_fileid/pull/23) ([@dlqqq](https://github.com/dlqqq))
+
+### Contributors to this release
+
+([GitHub contributors page for this release](https://github.com/jupyter-server/jupyter_server_fileid/graphs/contributors?from=2022-10-20&to=2022-10-21&type=c))
+
+[@dlqqq](https://github.com/search?q=repo%3Ajupyter-server%2Fjupyter_server_fileid+involves%3Adlqqq+updated%3A2022-10-20..2022-10-21&type=Issues)
+
+<!-- <END NEW CHANGELOG ENTRY> -->
+
 ## 0.4.1
 
 ([Full Changelog](https://github.com/jupyter-server/jupyter_server_fileid/compare/v0.4.0...99bd17b2502e67fbe2b4952675762027a9d438c2))
@@ -15,8 +31,6 @@
 ([GitHub contributors page for this release](https://github.com/jupyter-server/jupyter_server_fileid/graphs/contributors?from=2022-10-20&to=2022-10-20&type=c))
 
 [@dlqqq](https://github.com/search?q=repo%3Ajupyter-server%2Fjupyter_server_fileid+involves%3Adlqqq+updated%3A2022-10-20..2022-10-20&type=Issues)
-
-<!-- <END NEW CHANGELOG ENTRY> -->
 
 ## 0.4.0
 
