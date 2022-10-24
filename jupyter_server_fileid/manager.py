@@ -1,10 +1,11 @@
 import os
 import sqlite3
 import stat
+import time
 from typing import Optional
 
 from jupyter_core.paths import jupyter_data_dir
-from traitlets import TraitError, Unicode, validate
+from traitlets import Int, TraitError, Unicode, validate
 from traitlets.config.configurable import LoggingConfigurable
 
 
@@ -65,11 +66,23 @@ class FileIdManager(LoggingConfigurable):
         config=True,
     )
 
+    autosync_interval = Int(
+        default_value=5,
+        help=(
+            "How often to automatically invoke `sync_all()` when calling `get_path()`, in seconds. "
+            "Set to 0 to force `sync_all()` to always be called when calling `get_path()`. "
+            "Set to a negative value to disable autosync for `get_path()`."
+            "Defaults to 5."
+        ),
+        config=True,
+    )
+
     def __init__(self, *args, **kwargs):
         # pass args and kwargs to parent Configurable
         super().__init__(*args, **kwargs)
         # initialize instance attrs
         self._update_cursor = False
+        self._last_sync = 0.0
         # initialize connection with db
         self.log.info(f"FileIdManager : Configured root dir: {self.root_dir}")
         self.log.info(f"FileIdManager : Configured database path: {self.db_path}")
@@ -140,6 +153,7 @@ class FileIdManager(LoggingConfigurable):
         _sync_file(). Hence the cursor needs to be redefined if
         self._update_cursor is set to True by _sync_file().
         """
+        now = time.time()
         cursor = self.con.execute("SELECT path, mtime FROM Files WHERE is_dir = 1")
         self._update_cursor = False
         dir = cursor.fetchone()
@@ -169,6 +183,8 @@ class FileIdManager(LoggingConfigurable):
                 cursor = self.con.execute("SELECT path, mtime FROM Files WHERE is_dir = 1")
 
             dir = cursor.fetchone()
+
+        self._last_sync = now
 
     def _sync_dir(self, dir_path):
         """
@@ -361,8 +377,7 @@ class FileIdManager(LoggingConfigurable):
     def sync_all(self):
         """
         Syncs Files table with the filesystem and ensures that the correct path
-        is associated with each file ID. Required to be called manually
-        beforehand if `sync=False` is passed to `get_path()`.
+        is associated with each file ID.
 
         Notes
         -----
@@ -408,7 +423,7 @@ class FileIdManager(LoggingConfigurable):
         self.con.commit()
         return id
 
-    def get_path(self, id, sync=True):
+    def get_path(self, id, autosync=True):
         """Retrieves the file path associated with a file ID. The file path is
         relative to `self.root_dir`. Returns None if the ID does not
         exist in the Files table, if the path no longer has a
@@ -416,17 +431,24 @@ class FileIdManager(LoggingConfigurable):
 
         Parameters
         ----------
-        sync : bool
-            Whether to invoke `sync_all()` automatically prior to ID lookup.
+        autosync : bool
+            Whether to invoke `sync_all()` automatically based on
+            `autosync_interval` prior to ID lookup. Defaults to `True`.
 
         Notes
         -----
-        - For performance reasons, if this method must be called multiple times
-        in serial, then it is best to first invoke `sync_all()` and then call
-        this method with the argument `sync=False`.
+        - To force syncing when calling `get_path()`, call `sync_all()` manually
+        prior to calling `get_path()`.
+
+        - To force not syncing when calling `get_path()`, call `get_path()` with
+        `autosync=False`.
         """
-        if sync:
-            self.sync_all()
+        if (
+            autosync
+            and self.autosync_interval >= 0
+            and (time.time() - self._last_sync) >= self.autosync_interval
+        ):
+            self._sync_all()
 
         row = self.con.execute("SELECT path, ino FROM Files WHERE id = ?", (id,)).fetchone()
 
