@@ -1,8 +1,13 @@
 from jupyter_events.logger import EventLogger
 from jupyter_server.extension.application import ExtensionApp
-from traitlets import Type, default
+from jupyter_server.services.contents.filemanager import FileContentsManager
+from traitlets import Type
 
-from jupyter_server_fileid.manager import FileIdManager
+from jupyter_server_fileid.manager import (
+    AbstractFileIdManager,
+    ArbitraryFileIdManager,
+    LocalFileIdManager,
+)
 
 from .handlers import FileId2PathHandler, FilePath2IdHandler
 
@@ -12,17 +17,26 @@ class FileIdExtension(ExtensionApp):
     name = "jupyter_server_fileid"
 
     file_id_manager_class = Type(
-        klass=FileIdManager,
-        help="File ID manager instance to use. Defaults to FileIdManager.",
+        klass=AbstractFileIdManager,
+        help="""File ID manager instance to use.
+
+        Defaults to:
+        - LocalFileIdManager if contents manager is a FileContentsManager,
+        - ArbitraryFileIdManager otherwise.
+        """,
         config=True,
     )
 
-    @default("file_id_manager")
-    def _file_id_manager_default(self):
-        self.log.debug("No File ID manager configured. Defaulting to FileIdManager.")
-        return FileIdManager
-
     def initialize_settings(self):
+        if self.file_id_manager_class == AbstractFileIdManager:
+            if isinstance(self.settings["contents_manager"], FileContentsManager):
+                self.log.debug(
+                    "Contents manager is a FileContentsManager, defaulting to LocalFileIdManager."
+                )
+                self.file_id_manager_class = LocalFileIdManager
+            else:
+                self.file_id_manager_class = ArbitraryFileIdManager
+
         self.log.debug(f"Configured File ID manager: {self.file_id_manager_class.__name__}")
         file_id_manager = self.file_id_manager_class(
             log=self.log, root_dir=self.serverapp.root_dir, config=self.config

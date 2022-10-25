@@ -2,6 +2,7 @@ import os
 import sqlite3
 import stat
 import time
+from abc import ABC, abstractmethod
 from typing import Optional
 
 from jupyter_core.paths import jupyter_data_dir
@@ -37,7 +38,34 @@ def log(log_before, log_after):
     return decorator
 
 
-class FileIdManager(LoggingConfigurable):
+class AbstractFileIdManager(ABC):
+    @abstractmethod
+    def get_id(self, path: str) -> str:
+        ...
+
+    @abstractmethod
+    def get_path(self, id: str) -> str:
+        ...
+
+
+class ArbitraryFileIdManager(AbstractFileIdManager):
+    def __init__(self, *args, **kwargs):
+        pass
+
+    def get_id(self, path: str) -> str:
+        return path
+
+    def get_path(self, id: str) -> str:
+        return id
+
+
+class LocalFileIdManagerMeta(type(AbstractFileIdManager), type(LoggingConfigurable)):  # type: ignore
+    pass
+
+
+class LocalFileIdManager(
+    AbstractFileIdManager, LoggingConfigurable, metaclass=LocalFileIdManagerMeta
+):
     """
     Manager that supports tracking files across their lifetime by associating
     each with a unique file ID, which is maintained across filesystem operations.
@@ -60,7 +88,7 @@ class FileIdManager(LoggingConfigurable):
     db_path = Unicode(
         default_value=default_db_path,
         help=(
-            "The path of the DB file used by `FileIdManager`. "
+            "The path of the DB file used by `LocalFileIdManager`. "
             "Defaults to `jupyter_data_dir()/file_id_manager.db`."
         ),
         config=True,
@@ -84,11 +112,11 @@ class FileIdManager(LoggingConfigurable):
         self._update_cursor = False
         self._last_sync = 0.0
         # initialize connection with db
-        self.log.info(f"FileIdManager : Configured root dir: {self.root_dir}")
-        self.log.info(f"FileIdManager : Configured database path: {self.db_path}")
+        self.log.info(f"LocalFileIdManager : Configured root dir: {self.root_dir}")
+        self.log.info(f"LocalFileIdManager : Configured database path: {self.db_path}")
         self.con = sqlite3.connect(self.db_path)
-        self.log.info("FileIdManager : Successfully connected to database file.")
-        self.log.info("FileIdManager : Creating File ID tables and indices.")
+        self.log.info("LocalFileIdManager : Successfully connected to database file.")
+        self.log.info("LocalFileIdManager : Creating File ID tables and indices.")
         # do not allow reads to block writes. required when using multiple processes
         self.con.execute("PRAGMA journal_mode = WAL")
         self.con.execute(
@@ -112,9 +140,11 @@ class FileIdManager(LoggingConfigurable):
     @validate("root_dir", "db_path")
     def _validate_abspath_traits(self, proposal):
         if proposal["value"] is None:
-            raise TraitError(f"FileIdManager : {proposal['trait'].name} must not be None")
+            raise TraitError(f"LocalFileIdManager : {proposal['trait'].name} must not be None")
         if not os.path.isabs(proposal["value"]):
-            raise TraitError(f"FileIdManager : {proposal['trait'].name} must be an absolute path")
+            raise TraitError(
+                f"LocalFileIdManager : {proposal['trait'].name} must be an absolute path"
+            )
         return self._normalize_path(proposal["value"])
 
     def _index_all(self):
@@ -599,7 +629,7 @@ class FileIdManager(LoggingConfigurable):
         self.con.commit()
 
     def __del__(self):
-        """Cleans up `FileIdManager` by committing any pending transactions and
+        """Cleans up `LocalFileIdManager` by committing any pending transactions and
         closing the connection."""
         if hasattr(self, "con"):
             self.con.commit()

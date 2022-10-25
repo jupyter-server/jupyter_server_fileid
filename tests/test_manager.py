@@ -4,7 +4,7 @@ from unittest.mock import patch
 import pytest
 from traitlets import TraitError
 
-from jupyter_server_fileid.manager import FileIdManager
+from jupyter_server_fileid.manager import LocalFileIdManager
 
 
 @pytest.fixture
@@ -79,12 +79,12 @@ def get_path_nosync(fid_manager, id):
 
 def test_validates_root_dir(fid_db_path):
     with pytest.raises(TraitError, match="must be an absolute path"):
-        FileIdManager(root_dir=os.path.join("some", "rel", "path"), db_path=fid_db_path)
+        LocalFileIdManager(root_dir=os.path.join("some", "rel", "path"), db_path=fid_db_path)
 
 
 def test_validates_db_path(jp_root_dir):
     with pytest.raises(TraitError, match="must be an absolute path"):
-        FileIdManager(root_dir=str(jp_root_dir), db_path=os.path.join("some", "rel", "path"))
+        LocalFileIdManager(root_dir=str(jp_root_dir), db_path=os.path.join("some", "rel", "path"))
 
 
 def test_index(fid_manager, test_path):
