@@ -2,8 +2,7 @@ import os
 import sqlite3
 import stat
 import time
-from abc import ABC, abstractmethod
-from typing import Optional
+from typing import Any, Callable, Dict, Optional, Union
 
 from jupyter_core.paths import jupyter_data_dir
 from traitlets import Int, TraitError, Unicode, validate
@@ -38,41 +37,166 @@ def log(log_before, log_after):
     return decorator
 
 
-class AbstractFileIdManager(ABC):
-    @abstractmethod
-    def get_id(self, path: str) -> str:
-        ...
+class BaseFileIdManager(LoggingConfigurable):
+    """
+    Base class for File ID manager implementations. All File ID
+    managers should inherit from this class.
+    """
 
-    @abstractmethod
-    def get_path(self, id: str) -> str:
-        ...
+    root_dir = Unicode(
+        help=("The root directory being served by Jupyter server. Must be an absolute path."),
+        config=False,
+    )
 
+    db_path = Unicode(
+        default_value=default_db_path,
+        help=(
+            "The path of the DB file used by File ID manager implementations. "
+            "Defaults to `jupyter_data_dir()/file_id_manager.db`."
+        ),
+        config=True,
+    )
 
-class ArbitraryFileIdManager(AbstractFileIdManager):
+    @validate("root_dir", "db_path")
+    def _validate_abspath_traits(self, proposal):
+        if proposal["value"] is None:
+            raise TraitError(f"FileIdManager : {proposal['trait'].name} must not be None")
+        if not os.path.isabs(proposal["value"]):
+            raise TraitError(f"FileIdManager : {proposal['trait'].name} must be an absolute path")
+        return proposal["value"]
+
     def __init__(self, *args, **kwargs):
-        pass
+        super().__init__(*args, **kwargs)
 
-    def get_id(self, path: str) -> str:
-        return path
+    def index(self, path: str) -> Union[int, str, None]:
+        raise NotImplementedError("must be implemented by subclass")
 
-    def get_path(self, id: str) -> str:
+    def get_id(self, path: str) -> Union[int, str, None]:
+        raise NotImplementedError("must be implemented by subclass")
+
+    def get_path(self, id: Union[int, str]) -> Union[int, str, None]:
+        raise NotImplementedError("must be implemented by subclass")
+
+    def move(self, old_path: str, new_path: str) -> Union[int, str, None]:
+        raise NotImplementedError("must be implemented by subclass")
+
+    def copy(self, from_path: str, to_path: str) -> Union[int, str, None]:
+        raise NotImplementedError("must be implemented by subclass")
+
+    def delete(self, path: str) -> None:
+        raise NotImplementedError("must be implemented by subclass")
+
+    def save(self, path: str) -> None:
+        raise NotImplementedError("must be implemented by subclass")
+
+    def get_handlers_by_action(self) -> Dict[str, Optional[Callable[[Dict[str, Any]], Any]]]:
+        """Returns a dictionary whose keys are contents manager event actions
+        and whose values are callables invoked upon receipt of an event of the
+        same action. The callable accepts the body of the event as its only
+        argument. To ignore an event action, set the value to `None`."""
+        raise NotImplementedError("must be implemented by subclass")
+
+
+class ArbitraryFileIdManager(BaseFileIdManager):
+    """
+    File ID manager that works on arbitrary filesystems. Each file is assigned a
+    unique ID. The path is only updated upon calling `move()`, `copy()`, or
+    `delete()`, e.g. upon receipt of contents manager events emitted by Jupyter
+    Server 2.
+    """
+
+    def __init__(self, *args, **kwargs):
+        # pass args and kwargs to parent Configurable
+        super().__init__(*args, **kwargs)
+        # initialize instance attrs
+        self._update_cursor = False
+        # initialize connection with db
+        self.log.info(f"ArbitraryFileIdManager : Configured root dir: {self.root_dir}")
+        self.log.info(f"ArbitraryFileIdManager : Configured database path: {self.db_path}")
+        self.con = sqlite3.connect(self.db_path)
+        self.log.info("ArbitraryFileIdManager : Successfully connected to database file.")
+        self.log.info("ArbitraryFileIdManager : Creating File ID tables and indices.")
+        # do not allow reads to block writes. required when using multiple processes
+        self.con.execute("PRAGMA journal_mode = WAL")
+        self.con.execute(
+            "CREATE TABLE IF NOT EXISTS Files("
+            "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+            "path TEXT NOT NULL UNIQUE"
+            ")"
+        )
+        self.con.execute("CREATE INDEX IF NOT EXISTS ix_Files_path ON Files (path)")
+        self.con.commit()
+
+    def index(self, path: str) -> int:
+        row = self.con.execute("SELECT id FROM Files WHERE path = ?", (path,)).fetchone()
+        existing_id = row and row[0]
+
+        if existing_id:
+            return existing_id
+
+        # create new record
+        cursor = self.con.execute("INSERT INTO Files (path) VALUES (?)", (path,))
+        self.con.commit()
+        return cursor.lastrowid  # type:ignore
+
+    def get_id(self, path: str) -> Optional[int]:
+        row = self.con.execute("SELECT id FROM Files WHERE path = ?", (path,)).fetchone()
+        return row and row[0]
+
+    def get_path(self, id: Union[int, str]) -> Optional[int]:
+        row = self.con.execute("SELECT path FROM Files WHERE id = ?", (id,)).fetchone()
+        return row and row[0]
+
+    def move(self, old_path: str, new_path: str) -> None:
+        row = self.con.execute("SELECT id FROM Files WHERE path = ?", (old_path,)).fetchone()
+        id = row and row[0]
+
+        if id:
+            self.con.execute("UPDATE Files SET path = ? WHERE path = ?", (new_path, old_path))
+        else:
+            cursor = self.con.execute("INSERT INTO Files (path) VALUES (?)", (new_path,))
+            id = cursor.lastrowid
+
+        self.con.commit()
         return id
 
+    def copy(self, from_path: str, to_path: str) -> Optional[int]:
+        cursor = self.con.execute("INSERT INTO Files (path) VALUES (?)", (to_path,))
+        self.con.commit()
+        return cursor.lastrowid
 
-class LocalFileIdManagerMeta(type(AbstractFileIdManager), type(LoggingConfigurable)):  # type: ignore
-    pass
+    def delete(self, path: str) -> None:
+        self.con.execute("DELETE FROM Files WHERE path = ?", (path,))
+        self.con.commit()
+
+    def save(self, path: str) -> None:
+        return
+
+    def get_handlers_by_action(self) -> Dict[str, Optional[Callable[[Dict[str, Any]], Any]]]:
+        return {
+            "get": None,
+            "save": None,
+            "rename": lambda data: self.move(data["source_path"], data["path"]),
+            "copy": lambda data: self.copy(data["source_path"], data["path"]),
+            "delete": lambda data: self.delete(data["path"]),
+        }
+
+    def __del__(self):
+        """Cleans up `ArbitraryFileIdManager` by committing any pending
+        transactions and closing the connection."""
+        if hasattr(self, "con"):
+            self.con.commit()
+            self.con.close()
 
 
-class LocalFileIdManager(
-    AbstractFileIdManager, LoggingConfigurable, metaclass=LocalFileIdManagerMeta
-):
+class LocalFileIdManager(BaseFileIdManager):
     """
-    Manager that supports tracking files across their lifetime by associating
-    each with a unique file ID, which is maintained across filesystem operations.
+    File ID manager that supports tracking files in local filesystems by
+    associating each with a unique file ID, which is maintained across
+    filesystem operations.
 
     Notes
     -----
-
     All private helper methods prefixed with an underscore (except `__init__()`)
     do NOT commit their SQL statements in a transaction via `self.con.commit()`.
     This responsibility is delegated to the public method calling them to
@@ -80,19 +204,6 @@ class LocalFileIdManager(
     slower than committing a single SQL transaction wrapping all SQL statements
     performed during a method's procedure body.
     """
-
-    root_dir = Unicode(
-        help=("The root being served by Jupyter server. Must be an absolute path."), config=True
-    )
-
-    db_path = Unicode(
-        default_value=default_db_path,
-        help=(
-            "The path of the DB file used by `LocalFileIdManager`. "
-            "Defaults to `jupyter_data_dir()/file_id_manager.db`."
-        ),
-        config=True,
-    )
 
     autosync_interval = Int(
         default_value=5,
@@ -136,16 +247,6 @@ class LocalFileIdManager(
         self.con.execute("CREATE INDEX IF NOT EXISTS ix_Files_path ON Files (path)")
         self.con.execute("CREATE INDEX IF NOT EXISTS ix_Files_is_dir ON Files (is_dir)")
         self.con.commit()
-
-    @validate("root_dir", "db_path")
-    def _validate_abspath_traits(self, proposal):
-        if proposal["value"] is None:
-            raise TraitError(f"LocalFileIdManager : {proposal['trait'].name} must not be None")
-        if not os.path.isabs(proposal["value"]):
-            raise TraitError(
-                f"LocalFileIdManager : {proposal['trait'].name} must be an absolute path"
-            )
-        return self._normalize_path(proposal["value"])
 
     def _index_all(self):
         """Recursively indexes all directories under the server root."""
@@ -627,6 +728,15 @@ class LocalFileIdManager(
         (id,) = row
         self._update(id, stat_info)
         self.con.commit()
+
+    def get_handlers_by_action(self) -> Dict[str, Optional[Callable[[Dict[str, Any]], Any]]]:
+        return {
+            "get": None,
+            "save": lambda data: self.save(data["path"]),
+            "rename": lambda data: self.move(data["source_path"], data["path"]),
+            "copy": lambda data: self.copy(data["source_path"], data["path"]),
+            "delete": lambda data: self.delete(data["path"]),
+        }
 
     def __del__(self):
         """Cleans up `LocalFileIdManager` by committing any pending transactions and

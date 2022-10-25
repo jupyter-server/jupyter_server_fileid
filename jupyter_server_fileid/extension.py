@@ -4,8 +4,8 @@ from jupyter_server.services.contents.filemanager import FileContentsManager
 from traitlets import Type
 
 from jupyter_server_fileid.manager import (
-    AbstractFileIdManager,
     ArbitraryFileIdManager,
+    BaseFileIdManager,
     LocalFileIdManager,
 )
 
@@ -17,7 +17,7 @@ class FileIdExtension(ExtensionApp):
     name = "jupyter_server_fileid"
 
     file_id_manager_class = Type(
-        klass=AbstractFileIdManager,
+        klass=BaseFileIdManager,
         help="""File ID manager instance to use.
 
         Defaults to:
@@ -25,19 +25,24 @@ class FileIdExtension(ExtensionApp):
         - ArbitraryFileIdManager otherwise.
         """,
         config=True,
+        default_value=None,
+        allow_none=True,
     )
 
     def initialize_settings(self):
-        if self.file_id_manager_class == AbstractFileIdManager:
+        if self.file_id_manager_class is None:
             if isinstance(self.settings["contents_manager"], FileContentsManager):
-                self.log.debug(
-                    "Contents manager is a FileContentsManager, defaulting to LocalFileIdManager."
+                self.log.info(
+                    "Contents manager is a FileContentsManager. Defaulting to LocalFileIdManager."
                 )
                 self.file_id_manager_class = LocalFileIdManager
             else:
+                self.log.info(
+                    "Contents manager is not a FileContentsManager. Defaulting to ArbitraryFileIdManager."
+                )
                 self.file_id_manager_class = ArbitraryFileIdManager
 
-        self.log.debug(f"Configured File ID manager: {self.file_id_manager_class.__name__}")
+        self.log.info(f"Configured File ID manager: {self.file_id_manager_class.__name__}")
         file_id_manager = self.file_id_manager_class(
             log=self.log, root_dir=self.serverapp.root_dir, config=self.config
         )
@@ -49,15 +54,7 @@ class FileIdExtension(ExtensionApp):
 
     def initialize_event_listeners(self):
         file_id_manager = self.settings["file_id_manager"]
-
-        # define event handlers per contents manager action
-        handlers_by_action = {
-            "get": None,
-            "save": lambda data: file_id_manager.save(data["path"]),
-            "rename": lambda data: file_id_manager.move(data["source_path"], data["path"]),
-            "copy": lambda data: file_id_manager.copy(data["source_path"], data["path"]),
-            "delete": lambda data: file_id_manager.delete(data["path"]),
-        }
+        handlers_by_action = file_id_manager.get_handlers_by_action()
 
         async def cm_listener(logger: EventLogger, schema_id: str, data: dict) -> None:
             handler = handlers_by_action[data["action"]]
