@@ -4,7 +4,7 @@ from unittest.mock import patch
 import pytest
 from traitlets import TraitError
 
-from jupyter_server_fileid.manager import FileIdManager
+from jupyter_server_fileid.manager import ArbitraryFileIdManager, LocalFileIdManager
 
 
 @pytest.fixture
@@ -79,22 +79,28 @@ def get_path_nosync(fid_manager, id):
 
 def test_validates_root_dir(fid_db_path):
     with pytest.raises(TraitError, match="must be an absolute path"):
-        FileIdManager(root_dir=os.path.join("some", "rel", "path"), db_path=fid_db_path)
+        LocalFileIdManager(root_dir=os.path.join("some", "rel", "path"), db_path=fid_db_path)
+    with pytest.raises(TraitError, match="must be an absolute path"):
+        ArbitraryFileIdManager(root_dir=os.path.join("some", "rel", "path"), db_path=fid_db_path)
 
 
 def test_validates_db_path(jp_root_dir):
     with pytest.raises(TraitError, match="must be an absolute path"):
-        FileIdManager(root_dir=str(jp_root_dir), db_path=os.path.join("some", "rel", "path"))
+        LocalFileIdManager(root_dir=str(jp_root_dir), db_path=os.path.join("some", "rel", "path"))
+    with pytest.raises(TraitError, match="must be an absolute path"):
+        ArbitraryFileIdManager(
+            root_dir=str(jp_root_dir), db_path=os.path.join("some", "rel", "path")
+        )
 
 
-def test_index(fid_manager, test_path):
-    id = fid_manager.index(test_path)
+def test_index(any_fid_manager, test_path):
+    id = any_fid_manager.index(test_path)
     assert id is not None
 
 
-def test_index_already_indexed(fid_manager, test_path):
-    id = fid_manager.index(test_path)
-    assert id == fid_manager.index(test_path)
+def test_index_already_indexed(any_fid_manager, test_path):
+    id = any_fid_manager.index(test_path)
+    assert id == any_fid_manager.index(test_path)
 
 
 def test_index_symlink(fid_manager, test_path):
@@ -170,11 +176,11 @@ def test_index_crtime(fid_manager, test_path, stub_stat_crtime):
     assert fid_manager.index(test_path) == id
 
 
-def test_getters_indexed(fid_manager, test_path):
-    id = fid_manager.index(test_path)
+def test_getters_indexed(any_fid_manager, test_path):
+    id = any_fid_manager.index(test_path)
 
-    assert fid_manager.get_id(test_path) == id
-    assert fid_manager.get_path(id) == test_path
+    assert any_fid_manager.get_id(test_path) == id
+    assert any_fid_manager.get_path(id) == test_path
 
 
 def test_getters_nonnormalized(fid_manager, test_path, fs_helpers):
@@ -198,8 +204,8 @@ def test_getters_oob_delete(fid_manager, test_path, fs_helpers):
     assert fid_manager.get_path(id) is None
 
 
-def test_get_id_unindexed(fid_manager, test_path_child):
-    assert fid_manager.get_id(test_path_child) is None
+def test_get_id_unindexed(any_fid_manager, test_path_child):
+    assert any_fid_manager.get_id(test_path_child) is None
 
 
 # test out-of-band move detection for FIM.get_id()
@@ -315,36 +321,36 @@ def test_get_path_oob_move_deeply_nested(
     assert fid_manager.get_path(id) == new_test_path
 
 
-def test_move_unindexed(fid_manager, old_path, new_path, fs_helpers):
+def test_move_unindexed(any_fid_manager, old_path, new_path, fs_helpers):
     fs_helpers.move(old_path, new_path)
-    id = fid_manager.move(old_path, new_path)
+    id = any_fid_manager.move(old_path, new_path)
 
     assert id is not None
-    assert fid_manager.get_id(old_path) is None
-    assert fid_manager.get_id(new_path) is id
-    assert fid_manager.get_path(id) == new_path
+    assert any_fid_manager.get_id(old_path) is None
+    assert any_fid_manager.get_id(new_path) is id
+    assert any_fid_manager.get_path(id) == new_path
 
 
-def test_move_indexed(fid_manager, old_path, new_path, fs_helpers):
-    old_id = fid_manager.index(old_path)
+def test_move_indexed(any_fid_manager, old_path, new_path, fs_helpers):
+    old_id = any_fid_manager.index(old_path)
 
     fs_helpers.move(old_path, new_path)
-    new_id = fid_manager.move(old_path, new_path)
+    new_id = any_fid_manager.move(old_path, new_path)
 
     assert old_id == new_id
-    assert fid_manager.get_id(old_path) is None
-    assert fid_manager.get_id(new_path) == new_id
-    assert fid_manager.get_path(old_id) == new_path
+    assert any_fid_manager.get_id(old_path) is None
+    assert any_fid_manager.get_id(new_path) == new_id
+    assert any_fid_manager.get_path(old_id) == new_path
 
 
 # test for disjoint move handling
 # disjoint move: any out-of-band move that does not preserve stat info
-def test_disjoint_move_indexed(fid_manager, old_path, new_path, fs_helpers):
-    old_id = fid_manager.index(old_path)
+def test_disjoint_move_indexed(any_fid_manager, old_path, new_path, fs_helpers):
+    old_id = any_fid_manager.index(old_path)
 
     fs_helpers.delete(old_path)
     fs_helpers.touch(new_path, dir=True)
-    new_id = fid_manager.move(old_path, new_path)
+    new_id = any_fid_manager.move(old_path, new_path)
 
     assert old_id == new_id
 
@@ -373,10 +379,10 @@ def test_move_recursive(
     assert get_id_nosync(fid_manager, new_path_grandchild) == grandchild_id
 
 
-def test_copy(fid_manager, old_path, new_path, fs_helpers):
+def test_copy(any_fid_manager, old_path, new_path, fs_helpers):
+    old_id = any_fid_manager.index(old_path)
     fs_helpers.copy(old_path, new_path)
-    new_id = fid_manager.copy(old_path, new_path)
-    old_id = fid_manager.get_id(old_path)
+    new_id = any_fid_manager.copy(old_path, new_path)
 
     assert old_id is not None
     assert new_id is not None
@@ -405,14 +411,14 @@ def test_copy_recursive(
     assert fid_manager.get_id(new_path_grandchild) is not None
 
 
-def test_delete(fid_manager, test_path, fs_helpers):
-    id = fid_manager.index(test_path)
+def test_delete(any_fid_manager, test_path, fs_helpers):
+    id = any_fid_manager.index(test_path)
 
     fs_helpers.delete(test_path)
-    fid_manager.delete(test_path)
+    any_fid_manager.delete(test_path)
 
-    assert fid_manager.get_id(test_path) is None
-    assert fid_manager.get_path(id) is None
+    assert any_fid_manager.get_id(test_path) is None
+    assert any_fid_manager.get_path(id) is None
 
 
 def test_delete_recursive(fid_manager, test_path, test_path_child, fs_helpers):
@@ -425,13 +431,13 @@ def test_delete_recursive(fid_manager, test_path, test_path_child, fs_helpers):
     assert fid_manager.get_id(test_path_child) is None
 
 
-def test_save(fid_manager, test_path, fs_helpers):
-    id = fid_manager.index(test_path)
+def test_save(any_fid_manager, test_path, fs_helpers):
+    id = any_fid_manager.index(test_path)
 
     fs_helpers.edit(test_path)
-    fid_manager.save(test_path)
+    any_fid_manager.save(test_path)
 
-    assert fid_manager.get_id(test_path) == id
+    assert any_fid_manager.get_id(test_path) == id
 
 
 def test_autosync_gt_0(fid_manager, old_path, new_path, fs_helpers):

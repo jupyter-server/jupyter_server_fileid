@@ -19,11 +19,11 @@ and asserting that `jupyter_server_fileid` is enabled.
 
 ## Usage
 
-`jupyter_server_fileid`, by default, constructs a `FileIdManager` instance and
-stores it under `serverapp.settings["file_id_manager"]`. This `FileIdManager`
+`jupyter_server_fileid`, by default, constructs a `LocalFileIdManager` instance and
+stores it under `serverapp.settings["file_id_manager"]`. This `LocalFileIdManager`
 instance is a developer's way of accessing its key methods.
 
-Once you obtain a reference to the `FileIdManager` instance and bind it to some
+Once you obtain a reference to the `LocalFileIdManager` instance and bind it to some
 name, e.g. `fim`, all file ID operations can be performed as methods on that
 object. File ID operations are best illustrated in the following examples.
 
