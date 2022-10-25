@@ -423,29 +423,19 @@ class FileIdManager(LoggingConfigurable):
         self.con.commit()
         return id
 
-    def get_path(self, id, autosync=True):
+    def get_path(self, id):
         """Retrieves the file path associated with a file ID. The file path is
         relative to `self.root_dir`. Returns None if the ID does not
         exist in the Files table, if the path no longer has a
         file, or if the path is not a child of `self.root_dir`.
 
-        Parameters
-        ----------
-        autosync : bool
-            Whether to invoke `sync_all()` automatically based on
-            `autosync_interval` prior to ID lookup. Defaults to `True`.
-
         Notes
         -----
         - To force syncing when calling `get_path()`, call `sync_all()` manually
         prior to calling `get_path()`.
-
-        - To force not syncing when calling `get_path()`, call `get_path()` with
-        `autosync=False`.
         """
         if (
-            autosync
-            and self.autosync_interval >= 0
+            self.autosync_interval >= 0
             and (time.time() - self._last_sync) >= self.autosync_interval
         ):
             self._sync_all()
