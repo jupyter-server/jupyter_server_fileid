@@ -2,7 +2,8 @@ import os
 import sqlite3
 import stat
 import time
-from typing import Any, Callable, Dict, Optional, Union
+import uuid
+from typing import Any, Callable, Dict, Optional
 
 from jupyter_core.paths import jupyter_data_dir
 from traitlets import Int, TraitError, Unicode, validate
@@ -68,19 +69,22 @@ class BaseFileIdManager(LoggingConfigurable):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-    def index(self, path: str) -> Union[int, str, None]:
+    def _uuid(self) -> str:
+        return str(uuid.uuid4())
+
+    def index(self, path: str) -> Optional[str]:
         raise NotImplementedError("must be implemented by subclass")
 
-    def get_id(self, path: str) -> Union[int, str, None]:
+    def get_id(self, path: str) -> Optional[str]:
         raise NotImplementedError("must be implemented by subclass")
 
-    def get_path(self, id: Union[int, str]) -> Union[int, str, None]:
+    def get_path(self, id: str) -> Optional[str]:
         raise NotImplementedError("must be implemented by subclass")
 
-    def move(self, old_path: str, new_path: str) -> Union[int, str, None]:
+    def move(self, old_path: str, new_path: str) -> Optional[str]:
         raise NotImplementedError("must be implemented by subclass")
 
-    def copy(self, from_path: str, to_path: str) -> Union[int, str, None]:
+    def copy(self, from_path: str, to_path: str) -> Optional[str]:
         raise NotImplementedError("must be implemented by subclass")
 
     def delete(self, path: str) -> None:
@@ -120,14 +124,19 @@ class ArbitraryFileIdManager(BaseFileIdManager):
         self.con.execute("PRAGMA journal_mode = WAL")
         self.con.execute(
             "CREATE TABLE IF NOT EXISTS Files("
-            "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+            "id TEXT PRIMARY KEY NOT NULL, "
             "path TEXT NOT NULL UNIQUE"
             ")"
         )
         self.con.execute("CREATE INDEX IF NOT EXISTS ix_Files_path ON Files (path)")
         self.con.commit()
 
-    def index(self, path: str) -> int:
+    def _create(self, path: str) -> str:
+        id = self._uuid()
+        self.con.execute("INSERT INTO Files (id, path) VALUES (?, ?)", (id, path))
+        return id
+
+    def index(self, path: str) -> str:
         row = self.con.execute("SELECT id FROM Files WHERE path = ?", (path,)).fetchone()
         existing_id = row and row[0]
 
@@ -135,15 +144,15 @@ class ArbitraryFileIdManager(BaseFileIdManager):
             return existing_id
 
         # create new record
-        cursor = self.con.execute("INSERT INTO Files (path) VALUES (?)", (path,))
+        id = self._create(path)
         self.con.commit()
-        return cursor.lastrowid  # type:ignore
+        return id
 
-    def get_id(self, path: str) -> Optional[int]:
+    def get_id(self, path: str) -> Optional[str]:
         row = self.con.execute("SELECT id FROM Files WHERE path = ?", (path,)).fetchone()
         return row and row[0]
 
-    def get_path(self, id: Union[int, str]) -> Optional[int]:
+    def get_path(self, id: str) -> Optional[str]:
         row = self.con.execute("SELECT path FROM Files WHERE id = ?", (id,)).fetchone()
         return row and row[0]
 
@@ -154,16 +163,15 @@ class ArbitraryFileIdManager(BaseFileIdManager):
         if id:
             self.con.execute("UPDATE Files SET path = ? WHERE path = ?", (new_path, old_path))
         else:
-            cursor = self.con.execute("INSERT INTO Files (path) VALUES (?)", (new_path,))
-            id = cursor.lastrowid
+            id = self._create(new_path)
 
         self.con.commit()
         return id
 
-    def copy(self, from_path: str, to_path: str) -> Optional[int]:
-        cursor = self.con.execute("INSERT INTO Files (path) VALUES (?)", (to_path,))
+    def copy(self, from_path: str, to_path: str) -> Optional[str]:
+        id = self._create(to_path)
         self.con.commit()
-        return cursor.lastrowid
+        return id
 
     def delete(self, path: str) -> None:
         self.con.execute("DELETE FROM Files WHERE path = ?", (path,))
@@ -232,7 +240,7 @@ class LocalFileIdManager(BaseFileIdManager):
         self.con.execute("PRAGMA journal_mode = WAL")
         self.con.execute(
             "CREATE TABLE IF NOT EXISTS Files("
-            "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+            "id TEXT PRIMARY KEY NOT NULL, "
             # uniqueness constraint relaxed here because we need to keep records
             # of deleted files which may occupy same path
             "path TEXT NOT NULL, "
@@ -377,7 +385,7 @@ class LocalFileIdManager(BaseFileIdManager):
 
         Returns
         -------
-        id : int, optional
+        id : str, optional
             ID of the file if it is a real file (not a symlink) and it was
             previously indexed. None otherwise.
 
@@ -462,12 +470,12 @@ class LocalFileIdManager(BaseFileIdManager):
         dangerous and may throw a runtime error if the file is not guaranteed to
         have a unique `ino`.
         """
-        cursor = self.con.execute(
-            "INSERT INTO Files (path, ino, crtime, mtime, is_dir) VALUES (?, ?, ?, ?, ?)",
-            (path, stat_info.ino, stat_info.crtime, stat_info.mtime, stat_info.is_dir),
+        id = self._uuid()
+        self.con.execute(
+            "INSERT INTO Files (id, path, ino, crtime, mtime, is_dir) VALUES (?, ?, ?, ?, ?, ?)",
+            (id, path, stat_info.ino, stat_info.crtime, stat_info.mtime, stat_info.is_dir),
         )
-
-        return cursor.lastrowid
+        return id
 
     def _update(self, id, stat_info=None, path=None):
         """Updates a record given its file ID and stat info.
@@ -670,16 +678,7 @@ class LocalFileIdManager(BaseFileIdManager):
                 stat_info = self._stat(to_recpath)
                 if not stat_info:
                     continue
-                self.con.execute(
-                    "INSERT INTO FILES (path, ino, crtime, mtime, is_dir) VALUES (?, ?, ?, ?, ?)",
-                    (
-                        to_recpath,
-                        stat_info.ino,
-                        stat_info.crtime,
-                        stat_info.mtime,
-                        stat_info.is_dir,
-                    ),
-                )
+                self._create(to_recpath, stat_info)
 
         self.index(from_path, commit=False)
         # transaction committed in index()
