@@ -1,3 +1,4 @@
+import ntpath
 import os
 from unittest.mock import patch
 
@@ -78,23 +79,49 @@ def get_path_nosync(fid_manager, id):
 
 
 def test_validates_root_dir(fid_db_path):
-    rel_root_dir = root_dir = os.path.join("some", "rel", "path")
+    root_dir = "s3://bucket"
     with pytest.raises(TraitError, match="must be an absolute path"):
-        LocalFileIdManager(root_dir=rel_root_dir, db_path=fid_db_path)
+        LocalFileIdManager(root_dir=root_dir, db_path=fid_db_path)
     # root_dir can be relative for ArbitraryFileIdManager instances (and None)
-    afm = ArbitraryFileIdManager(root_dir=rel_root_dir, db_path=fid_db_path)
-    assert afm.root_dir == rel_root_dir
+    afm = ArbitraryFileIdManager(root_dir=root_dir, db_path=fid_db_path)
+    assert afm.root_dir == root_dir
     afm2 = ArbitraryFileIdManager(root_dir=None, db_path=fid_db_path)
     assert afm2.root_dir is None
 
 
-def test_validates_db_path(jp_root_dir):
+def test_validates_db_path(jp_root_dir, any_fid_manager_class):
     with pytest.raises(TraitError, match="must be an absolute path"):
-        LocalFileIdManager(root_dir=str(jp_root_dir), db_path=os.path.join("some", "rel", "path"))
-    with pytest.raises(TraitError, match="must be an absolute path"):
-        ArbitraryFileIdManager(
+        any_fid_manager_class(
             root_dir=str(jp_root_dir), db_path=os.path.join("some", "rel", "path")
         )
+
+
+def test_different_roots(
+    any_fid_manager_class, fid_db_path, jp_root_dir, test_path, test_path_child
+):
+    """Assert that default FIM implementations assign the same file the same
+    file ID agnostic of contents manager root."""
+    fid_manager_1 = any_fid_manager_class(db_path=fid_db_path, root_dir=str(jp_root_dir))
+    fid_manager_2 = any_fid_manager_class(
+        db_path=fid_db_path, root_dir=str(jp_root_dir / test_path)
+    )
+
+    id_1 = fid_manager_1.index(test_path_child)
+    id_2 = fid_manager_2.index(os.path.basename(test_path_child))
+
+    assert id_1 == id_2
+
+
+def test_different_roots_arbitrary(fid_db_path):
+    """Assert that ArbitraryFileIdManager assigns the same file the same file ID
+    agnostic of contents manager root, even if non-local."""
+    manager_1 = ArbitraryFileIdManager(db_path=fid_db_path, root_dir="s3://bucket")
+    manager_2 = ArbitraryFileIdManager(db_path=fid_db_path, root_dir="s3://bucket/folder")
+
+    id_1 = manager_1.index("folder/child")
+    id_2 = manager_2.index("child")
+
+    assert id_1 == id_2
 
 
 def test_index(any_fid_manager, test_path):
@@ -248,6 +275,33 @@ def test_get_id_oob_move_new_file_at_old_path(fid_manager, old_path, new_path, f
     assert fid_manager.get_id(new_path) == old_id
     assert fid_manager.get_path(old_id) == new_path
     assert fid_manager.get_id(other_path) == other_id
+
+
+def test_get_path_arbitrary_preserves_path(arbitrary_fid_manager):
+    """Tests whether ArbitraryFileIdManager always preserves the file paths it
+    receives."""
+    path = "AbCd.txt"
+    id = arbitrary_fid_manager.index(path)
+    assert path == arbitrary_fid_manager.get_path(id)
+
+
+@patch("os.path.sep", new="\\")
+@patch("os.path.relpath", new=ntpath.relpath)
+@patch("os.path.normpath", new=ntpath.normpath)
+@patch("os.path.join", new=ntpath.join)
+def test_get_path_returns_api_path(jp_root_dir, fid_db_path):
+    """Tests whether get_path() method always returns an API path, i.e. one
+    relative to the server root and one delimited by forward slashes (even if
+    os.path.sep = "\\")."""
+    test_path = "a\\b\\c"
+    expected_path = "a/b/c"
+    manager = ArbitraryFileIdManager(
+        root_dir=ntpath.join("c:", ntpath.normpath(str(jp_root_dir))), db_path=fid_db_path
+    )
+
+    id = manager.index(test_path)
+    path = manager.get_path(id)
+    assert path == expected_path
 
 
 def test_get_path_oob_move(fid_manager, old_path, new_path, fs_helpers):

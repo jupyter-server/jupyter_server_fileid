@@ -40,14 +40,26 @@ def fid_manager(fid_db_path, jp_root_dir):
     return fid_manager
 
 
+@pytest.fixture
+def arbitrary_fid_manager(fid_db_path, jp_root_dir):
+    """Fixture returning a test-configured instance of `ArbitraryFileIdManager`."""
+    arbitrary_fid_manager = ArbitraryFileIdManager(db_path=fid_db_path, root_dir=str(jp_root_dir))
+    arbitrary_fid_manager.con.execute("PRAGMA journal_mode = OFF")
+    return arbitrary_fid_manager
+
+
 @pytest.fixture(params=["local", "arbitrary"])
-def any_fid_manager(request, fid_db_path, jp_root_dir):
+def any_fid_manager_class(request):
     """Parametrized fixture that runs the test with each of the default File ID
     manager implementations."""
     class_by_param = {"local": LocalFileIdManager, "arbitrary": ArbitraryFileIdManager}
+    return class_by_param[request.param]
 
-    fid_manager = class_by_param[request.param](db_path=fid_db_path, root_dir=str(jp_root_dir))
-    fid_manager.con.execute("PRAGMA journal_mode = OFF")  # type: ignore[attr-defined]
+
+@pytest.fixture
+def any_fid_manager(any_fid_manager_class, fid_db_path, jp_root_dir):
+    fid_manager = any_fid_manager_class(db_path=fid_db_path, root_dir=str(jp_root_dir))
+    fid_manager.con.execute("PRAGMA journal_mode = OFF")
     return fid_manager
 
 
