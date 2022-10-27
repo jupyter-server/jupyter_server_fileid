@@ -1,9 +1,9 @@
-from abc import ABC, ABCMeta, abstractmethod
 import os
 import sqlite3
 import stat
 import time
 import uuid
+from abc import ABC, ABCMeta, abstractmethod
 from typing import Any, Callable, Dict, Optional
 
 from jupyter_core.paths import jupyter_data_dir
@@ -69,7 +69,9 @@ class BaseFileIdManager(ABC, LoggingConfigurable, metaclass=FileIdManagerMeta):
         if proposal["value"] is None:
             raise TraitError(f"BaseFileIdManager : {proposal['trait'].name} must not be None")
         if not os.path.isabs(proposal["value"]):
-            raise TraitError(f"BaseFileIdManager : {proposal['trait'].name} must be an absolute path")
+            raise TraitError(
+                f"BaseFileIdManager : {proposal['trait'].name} must be an absolute path"
+            )
         return proposal["value"]
 
     @staticmethod
@@ -286,7 +288,9 @@ class LocalFileIdManager(BaseFileIdManager):
         if proposal["value"] is None:
             raise TraitError(f"LocalFileIdManager : {proposal['trait'].name} must not be None")
         if not os.path.isabs(proposal["value"]):
-            raise TraitError(f"LocalFileIdManager : {proposal['trait'].name} must be an absolute path")
+            raise TraitError(
+                f"LocalFileIdManager : {proposal['trait'].name} must be an absolute path"
+            )
         return proposal["value"]
 
     def __init__(self, *args, **kwargs):
