@@ -1,3 +1,4 @@
+from abc import ABC, ABCMeta, abstractmethod
 import os
 import sqlite3
 import stat
@@ -38,15 +39,20 @@ def log(log_before, log_after):
     return decorator
 
 
-class BaseFileIdManager(LoggingConfigurable):
+class FileIdManagerMeta(ABCMeta, type(LoggingConfigurable)):  # type: ignore
+    pass
+
+
+class BaseFileIdManager(ABC, LoggingConfigurable, metaclass=FileIdManagerMeta):
     """
     Base class for File ID manager implementations. All File ID
     managers should inherit from this class.
     """
 
     root_dir = Unicode(
-        help=("The root directory being served by Jupyter server. Must be an absolute path."),
+        help="The root directory being served by Jupyter server.",
         config=False,
+        allow_none=True,
     )
 
     db_path = Unicode(
@@ -58,47 +64,98 @@ class BaseFileIdManager(LoggingConfigurable):
         config=True,
     )
 
-    @validate("root_dir", "db_path")
-    def _validate_abspath_traits(self, proposal):
+    @validate("db_path")
+    def _validate_db_path(self, proposal):
         if proposal["value"] is None:
-            raise TraitError(f"FileIdManager : {proposal['trait'].name} must not be None")
+            raise TraitError(f"BaseFileIdManager : {proposal['trait'].name} must not be None")
         if not os.path.isabs(proposal["value"]):
-            raise TraitError(f"FileIdManager : {proposal['trait'].name} must be an absolute path")
+            raise TraitError(f"BaseFileIdManager : {proposal['trait'].name} must be an absolute path")
         return proposal["value"]
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
-    def _uuid(self) -> str:
+    @staticmethod
+    def _uuid() -> str:
         return str(uuid.uuid4())
 
+    @abstractmethod
     def index(self, path: str) -> Optional[str]:
-        raise NotImplementedError("must be implemented by subclass")
+        """Returns the file ID for the file corresponding to `path`.
 
+        If `path` is not already indexed, a new file ID will be created and associated
+        with `path`, otherwise the existing file ID will be returned. Returns None if
+        `path` does not correspond to an object as determined by the implementation.
+        """
+        pass
+
+    @abstractmethod
     def get_id(self, path: str) -> Optional[str]:
-        raise NotImplementedError("must be implemented by subclass")
+        """Retrieves the file ID associated with the given file path.
 
+        Returns None if the file has not yet been indexed.
+        """
+        pass
+
+    @abstractmethod
     def get_path(self, id: str) -> Optional[str]:
-        raise NotImplementedError("must be implemented by subclass")
+        """Retrieves the file path associated with the given file ID.
 
+        Returns None if the file ID does not exist.
+        """
+        pass
+
+    @abstractmethod
     def move(self, old_path: str, new_path: str) -> Optional[str]:
-        raise NotImplementedError("must be implemented by subclass")
+        """Emulates file move operations by updating the old file path to the new file path.
 
+        If old_path corresponds to a directory (as determined by the implementation), all indexed
+        file paths prefixed with old_path will have their locations updated and prefixed with new_path.
+
+        Returns the file ID if new_path is valid, otherwise None.
+        """
+        pass
+
+    @abstractmethod
     def copy(self, from_path: str, to_path: str) -> Optional[str]:
-        raise NotImplementedError("must be implemented by subclass")
+        """Emulates file copy operations by copying the entry corresponding to from_path
+         and inserting an entry corresponding to to_path.
 
+        If from_path corresponds to a directory (as determined by the implementation), all indexed
+        file paths prefixed with from_path will have their entries copying and inserted to entries
+        corresponding to to_path.
+
+        Returns the file ID if to_path is valid, otherwise None.
+        """
+        pass
+
+    @abstractmethod
     def delete(self, path: str) -> None:
-        raise NotImplementedError("must be implemented by subclass")
+        """Emulates file delete operations by deleting the entry corresponding to path.
 
-    def save(self, path: str) -> None:
-        raise NotImplementedError("must be implemented by subclass")
+        If path corresponds to a directory (as determined by the implementation), all indexed
+        file paths will have their entries deleted.
 
+        Returns None.
+        """
+        pass
+
+    @abstractmethod
+    def save(self, path: str) -> Optional[str]:
+        """Emulates file save operations by inserting the entry corresponding to path.
+
+        Entries are inserted when one corresponding to path does not already exist.
+
+        Returns the ID corresponding to path or None if path is determined to not be valid.
+        """
+        pass
+
+    @abstractmethod
     def get_handlers_by_action(self) -> Dict[str, Optional[Callable[[Dict[str, Any]], Any]]]:
-        """Returns a dictionary whose keys are contents manager event actions
-        and whose values are callables invoked upon receipt of an event of the
-        same action. The callable accepts the body of the event as its only
-        argument. To ignore an event action, set the value to `None`."""
-        raise NotImplementedError("must be implemented by subclass")
+        """Returns a dictionary mapping contents manager event actions to a handler (callable).
+
+        Returns a dictionary whose keys are contents manager event actions and whose values are callables
+        invoked upon receipt of an event of the same action. The callable accepts the body of the event as
+        its only argument. To ignore an event action, set the value to `None`.
+        """
+        pass
 
 
 class ArbitraryFileIdManager(BaseFileIdManager):
@@ -223,6 +280,14 @@ class LocalFileIdManager(BaseFileIdManager):
         ),
         config=True,
     )
+
+    @validate("root_dir")
+    def _validate_root_dir(self, proposal):
+        if proposal["value"] is None:
+            raise TraitError(f"LocalFileIdManager : {proposal['trait'].name} must not be None")
+        if not os.path.isabs(proposal["value"]):
+            raise TraitError(f"LocalFileIdManager : {proposal['trait'].name} must be an absolute path")
+        return proposal["value"]
 
     def __init__(self, *args, **kwargs):
         # pass args and kwargs to parent Configurable
@@ -718,7 +783,6 @@ class LocalFileIdManager(BaseFileIdManager):
         row = self.con.execute(
             "SELECT id FROM Files WHERE ino = ? AND path = ?", (stat_info.ino, path)
         ).fetchone()
-
         # if no record exists, return early
         if row is None:
             return

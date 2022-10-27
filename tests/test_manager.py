@@ -78,10 +78,14 @@ def get_path_nosync(fid_manager, id):
 
 
 def test_validates_root_dir(fid_db_path):
+    rel_root_dir = root_dir=os.path.join("some", "rel", "path")
     with pytest.raises(TraitError, match="must be an absolute path"):
-        LocalFileIdManager(root_dir=os.path.join("some", "rel", "path"), db_path=fid_db_path)
-    with pytest.raises(TraitError, match="must be an absolute path"):
-        ArbitraryFileIdManager(root_dir=os.path.join("some", "rel", "path"), db_path=fid_db_path)
+        LocalFileIdManager(root_dir=rel_root_dir, db_path=fid_db_path)
+    # root_dir can be relative for ArbitraryFileIdManager instances (and None)
+    afm = ArbitraryFileIdManager(root_dir=rel_root_dir, db_path=fid_db_path)
+    assert afm.root_dir == rel_root_dir
+    afm2 = ArbitraryFileIdManager(root_dir=None, db_path=fid_db_path)
+    assert afm2.root_dir is None
 
 
 def test_validates_db_path(jp_root_dir):
