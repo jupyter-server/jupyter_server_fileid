@@ -104,6 +104,39 @@ class BaseFileIdManager(ABC, LoggingConfigurable, metaclass=FileIdManagerMeta):
 
         return relpath
 
+    def _move_recursive(self, old_path: str, new_path: str, sep: str = os.path.sep) -> None:
+        """Move all children of a given directory at `old_path` to a new
+        directory at `new_path`, delimited by `sep`."""
+        old_path_glob = old_path + sep + "*"
+        records = self.con.execute(
+            "SELECT id, path FROM Files WHERE path GLOB ?", (old_path_glob,)
+        ).fetchall()
+
+        for record in records:
+            id, old_recpath = record
+            new_recpath = os.path.join(new_path, os.path.relpath(old_recpath, start=old_path))
+            self.con.execute("UPDATE Files SET path = ? WHERE id = ?", (new_recpath, id))
+
+    def _copy_recursive(self, from_path: str, to_path: str, sep: str = os.path.sep) -> None:
+        """Copy all children of a given directory at `from_path` to a new
+        directory at `to_path`, delimited by `sep`."""
+        from_path_glob = from_path + sep + "*"
+        records = self.con.execute(
+            "SELECT path FROM Files WHERE path GLOB ?", (from_path_glob,)
+        ).fetchall()
+
+        for record in records:
+            (from_recpath,) = record
+            to_recpath = os.path.join(to_path, os.path.relpath(from_recpath, start=from_path))
+            self.con.execute(
+                "INSERT INTO Files (id, path) VALUES (?, ?)", (self._uuid(), to_recpath)
+            )
+
+    def _delete_recursive(self, path: str, sep: str = os.path.sep) -> None:
+        """Delete all children of a given directory, delimited by `sep`."""
+        path_glob = path + sep + "*"
+        self.con.execute("DELETE FROM Files WHERE path GLOB ?", (path_glob,))
+
     @abstractmethod
     def index(self, path: str) -> Optional[str]:
         """Returns the file ID for the file corresponding to `path`.
@@ -258,6 +291,7 @@ class ArbitraryFileIdManager(BaseFileIdManager):
 
         if id:
             self.con.execute("UPDATE Files SET path = ? WHERE path = ?", (new_path, old_path))
+            self._move_recursive(old_path, new_path, "/")
         else:
             id = self._create(new_path)
 
@@ -267,13 +301,19 @@ class ArbitraryFileIdManager(BaseFileIdManager):
     def copy(self, from_path: str, to_path: str) -> Optional[str]:
         from_path = self._normalize_path(from_path)
         to_path = self._normalize_path(to_path)
+
         id = self._create(to_path)
+        self._copy_recursive(from_path, to_path, "/")
+
         self.con.commit()
         return id
 
     def delete(self, path: str) -> None:
         path = self._normalize_path(path)
+
         self.con.execute("DELETE FROM Files WHERE path = ?", (path,))
+        self._delete_recursive(path, "/")
+
         self.con.commit()
 
     def save(self, path: str) -> None:
@@ -707,21 +747,6 @@ class LocalFileIdManager(BaseFileIdManager):
         # finally, convert the path to a relative one and return it
         return self._from_normalized_path(path)
 
-    def _move_recursive(self, old_path, new_path):
-        """Updates path of all indexed files prefixed with `old_path` and
-        replaces the prefix with `new_path`."""
-        old_path_glob = os.path.join(old_path, "*")
-        records = self.con.execute(
-            "SELECT id, path FROM Files WHERE path GLOB ?", (old_path_glob,)
-        ).fetchall()
-
-        for record in records:
-            id, old_recpath = record
-            new_recpath = os.path.join(new_path, os.path.relpath(old_recpath, start=old_path))
-
-            # only update path, not stat info
-            self._update(id, path=new_recpath)
-
     @log(
         lambda self, old_path, new_path: f"Updating index following move from {old_path} to {new_path}.",
         lambda self, old_path, new_path: f"Successfully updated index following move from {old_path} to {new_path}.",
@@ -755,6 +780,22 @@ class LocalFileIdManager(BaseFileIdManager):
             self.con.commit()
             return id
 
+    def _copy_recursive(self, from_path: str, to_path: str, _: str = "") -> None:
+        """Copy all children of a given directory at `from_path` to a new
+        directory at `to_path`. Inserts stat_info with record."""
+        from_path_glob = os.path.join(from_path, "*")
+        records = self.con.execute(
+            "SELECT path FROM Files WHERE path GLOB ?", (from_path_glob,)
+        ).fetchall()
+
+        for record in records:
+            (from_recpath,) = record
+            to_recpath = os.path.join(to_path, os.path.relpath(from_recpath, start=from_path))
+            stat_info = self._stat(to_recpath)
+            if not stat_info:
+                continue
+            self._create(to_recpath, stat_info)
+
     @log(
         lambda self, from_path, to_path: f"Indexing {to_path} following copy from {from_path}.",
         lambda self, from_path, to_path: f"Successfully indexed {to_path} following copy from {from_path}.",
@@ -769,19 +810,7 @@ class LocalFileIdManager(BaseFileIdManager):
         to_path = self._normalize_path(to_path)
 
         if os.path.isdir(to_path):
-            from_path_glob = os.path.join(from_path, "*")
-            records = self.con.execute(
-                "SELECT path FROM Files WHERE path GLOB ?", (from_path_glob,)
-            ).fetchall()
-            for record in records:
-                if not record:
-                    continue
-                (from_recpath,) = record
-                to_recpath = os.path.join(to_path, os.path.relpath(from_recpath, start=from_path))
-                stat_info = self._stat(to_recpath)
-                if not stat_info:
-                    continue
-                self._create(to_recpath, stat_info)
+            self._copy_recursive(from_path, to_path)
 
         self.index(from_path, commit=False)
         # transaction committed in index()
@@ -797,8 +826,7 @@ class LocalFileIdManager(BaseFileIdManager):
         path = self._normalize_path(path)
 
         if os.path.isdir(path):
-            path_glob = os.path.join(path, "*")
-            self.con.execute("DELETE FROM Files WHERE path GLOB ?", (path_glob,))
+            self._delete_recursive(path)
 
         self.con.execute("DELETE FROM Files WHERE path = ?", (path,))
         self.con.commit()

@@ -414,7 +414,7 @@ def test_disjoint_move_indexed(any_fid_manager, old_path, new_path, fs_helpers):
 
 
 def test_move_recursive(
-    fid_manager,
+    any_fid_manager,
     old_path,
     old_path_child,
     old_path_grandchild,
@@ -423,18 +423,18 @@ def test_move_recursive(
     new_path_grandchild,
     fs_helpers,
 ):
-    parent_id = fid_manager.index(old_path)
-    child_id = fid_manager.index(old_path_child)
-    grandchild_id = fid_manager.index(old_path_grandchild)
+    parent_id = any_fid_manager.index(old_path)
+    child_id = any_fid_manager.index(old_path_child)
+    grandchild_id = any_fid_manager.index(old_path_grandchild)
 
     fs_helpers.move(old_path, new_path)
-    fid_manager.move(old_path, new_path)
+    any_fid_manager.move(old_path, new_path)
 
     # we avoid using get_id() here as it auto-corrects wrong path updates via
     # its out-of-band move detection logic. too smart for its own good!
-    assert get_id_nosync(fid_manager, new_path) == parent_id
-    assert get_id_nosync(fid_manager, new_path_child) == child_id
-    assert get_id_nosync(fid_manager, new_path_grandchild) == grandchild_id
+    assert get_id_nosync(any_fid_manager, new_path) == parent_id
+    assert get_id_nosync(any_fid_manager, new_path_child) == child_id
+    assert get_id_nosync(any_fid_manager, new_path_grandchild) == grandchild_id
 
 
 def test_copy(any_fid_manager, old_path, new_path, fs_helpers):
@@ -448,7 +448,7 @@ def test_copy(any_fid_manager, old_path, new_path, fs_helpers):
 
 
 def test_copy_recursive(
-    fid_manager,
+    any_fid_manager,
     old_path,
     old_path_child,
     old_path_grandchild,
@@ -457,16 +457,16 @@ def test_copy_recursive(
     new_path_grandchild,
     fs_helpers,
 ):
-    fid_manager.index(old_path)
-    fid_manager.index(old_path_child)
-    fid_manager.index(old_path_grandchild)
+    any_fid_manager.index(old_path)
+    any_fid_manager.index(old_path_child)
+    any_fid_manager.index(old_path_grandchild)
 
     fs_helpers.copy(old_path, new_path)
-    fid_manager.copy(old_path, new_path)
+    any_fid_manager.copy(old_path, new_path)
 
-    assert fid_manager.get_id(new_path) is not None
-    assert fid_manager.get_id(new_path_child) is not None
-    assert fid_manager.get_id(new_path_grandchild) is not None
+    assert any_fid_manager.get_id(new_path) is not None
+    assert any_fid_manager.get_id(new_path_child) is not None
+    assert any_fid_manager.get_id(new_path_grandchild) is not None
 
 
 def test_delete(any_fid_manager, test_path, fs_helpers):
@@ -479,14 +479,14 @@ def test_delete(any_fid_manager, test_path, fs_helpers):
     assert any_fid_manager.get_path(id) is None
 
 
-def test_delete_recursive(fid_manager, test_path, test_path_child, fs_helpers):
-    fid_manager.index(test_path)
-    fid_manager.index(test_path_child)
+def test_delete_recursive(any_fid_manager, test_path, test_path_child, fs_helpers):
+    any_fid_manager.index(test_path)
+    any_fid_manager.index(test_path_child)
 
     fs_helpers.delete(test_path)
-    fid_manager.delete(test_path)
+    any_fid_manager.delete(test_path)
 
-    assert fid_manager.get_id(test_path_child) is None
+    assert any_fid_manager.get_id(test_path_child) is None
 
 
 def test_save(any_fid_manager, test_path, fs_helpers):
