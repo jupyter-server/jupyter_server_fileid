@@ -78,6 +78,32 @@ class BaseFileIdManager(ABC, LoggingConfigurable, metaclass=FileIdManagerMeta):
     def _uuid() -> str:
         return str(uuid.uuid4())
 
+    def _normalize_path(self, path: str) -> str:
+        """Accepts an API path and returns a filesystem path, i.e. one prefixed
+        by root_dir and uses os.path.sep."""
+        # use commonprefix instead of commonpath, since root_dir may not be a
+        # absolute POSIX path.
+        if os.path.commonprefix([self.root_dir, path]) != self.root_dir:
+            path = os.path.join(self.root_dir, path)
+
+        return path
+
+    def _from_normalized_path(self, path: Optional[str]) -> Optional[str]:
+        """Accepts a filesystem path and returns an API path, i.e. one relative
+        to root_dir and uses forward slashes as the path separator. Returns
+        `None` if the given path is None or is not relative to root_dir."""
+        if path is None:
+            return None
+
+        if os.path.commonprefix([self.root_dir, path]) != self.root_dir:
+            return None
+
+        relpath = os.path.relpath(path, self.root_dir)
+        # always use forward slashes to delimit children
+        relpath = relpath.replace(os.path.sep, "/")
+
+        return relpath
+
     @abstractmethod
     def index(self, path: str) -> Optional[str]:
         """Returns the file ID for the file corresponding to `path`.
@@ -98,9 +124,14 @@ class BaseFileIdManager(ABC, LoggingConfigurable, metaclass=FileIdManagerMeta):
 
     @abstractmethod
     def get_path(self, id: str) -> Optional[str]:
-        """Retrieves the file path associated with the given file ID.
+        """
+        Accepts a file ID and returns the API path to that file. Returns None if
+        the file ID does not exist.
 
-        Returns None if the file ID does not exist.
+        Notes
+        -----
+        - See `_from_normalized_path()` for implementation details on how to
+        convert a filesystem path to an API path.
         """
         pass
 
@@ -191,11 +222,13 @@ class ArbitraryFileIdManager(BaseFileIdManager):
         self.con.commit()
 
     def _create(self, path: str) -> str:
+        path = self._normalize_path(path)
         id = self._uuid()
         self.con.execute("INSERT INTO Files (id, path) VALUES (?, ?)", (id, path))
         return id
 
     def index(self, path: str) -> str:
+        path = self._normalize_path(path)
         row = self.con.execute("SELECT id FROM Files WHERE path = ?", (path,)).fetchone()
         existing_id = row and row[0]
 
@@ -208,14 +241,18 @@ class ArbitraryFileIdManager(BaseFileIdManager):
         return id
 
     def get_id(self, path: str) -> Optional[str]:
+        path = self._normalize_path(path)
         row = self.con.execute("SELECT id FROM Files WHERE path = ?", (path,)).fetchone()
         return row and row[0]
 
     def get_path(self, id: str) -> Optional[str]:
         row = self.con.execute("SELECT path FROM Files WHERE id = ?", (id,)).fetchone()
-        return row and row[0]
+        path = row and row[0]
+        return self._from_normalized_path(path)
 
     def move(self, old_path: str, new_path: str) -> None:
+        old_path = self._normalize_path(old_path)
+        new_path = self._normalize_path(new_path)
         row = self.con.execute("SELECT id FROM Files WHERE path = ?", (old_path,)).fetchone()
         id = row and row[0]
 
@@ -228,11 +265,14 @@ class ArbitraryFileIdManager(BaseFileIdManager):
         return id
 
     def copy(self, from_path: str, to_path: str) -> Optional[str]:
+        from_path = self._normalize_path(from_path)
+        to_path = self._normalize_path(to_path)
         id = self._create(to_path)
         self.con.commit()
         return id
 
     def delete(self, path: str) -> None:
+        path = self._normalize_path(path)
         self.con.execute("DELETE FROM Files WHERE path = ?", (path,))
         self.con.commit()
 
@@ -324,6 +364,13 @@ class LocalFileIdManager(BaseFileIdManager):
         self.con.execute("CREATE INDEX IF NOT EXISTS ix_Files_path ON Files (path)")
         self.con.execute("CREATE INDEX IF NOT EXISTS ix_Files_is_dir ON Files (is_dir)")
         self.con.commit()
+
+    def _normalize_path(self, path):
+        path = super()._normalize_path(path)
+        path = os.path.normcase(path)
+        path = os.path.normpath(path)
+
+        return path
 
     def _index_all(self):
         """Recursively indexes all directories under the server root."""
@@ -491,14 +538,6 @@ class LocalFileIdManager(BaseFileIdManager):
 
         return id
 
-    def _normalize_path(self, path):
-        """Normalizes a given file path."""
-        if not os.path.isabs(path):
-            path = os.path.join(self.root_dir, path)
-        path = os.path.normcase(path)
-        path = os.path.normpath(path)
-        return path
-
     def _parse_raw_stat(self, raw_stat):
         """Accepts an `os.stat_result` object and returns a `StatStruct`
         object."""
@@ -665,13 +704,8 @@ class LocalFileIdManager(BaseFileIdManager):
         if ino != stat_info.ino or not self._check_timestamps(stat_info):
             return None
 
-        # if path is not relative to `self.root_dir`, return None.
-        if os.path.commonpath([self.root_dir, path]) != self.root_dir:
-            return None
-
-        # finally, convert the path to a relative one.
-        path = os.path.relpath(path, self.root_dir)
-        return path
+        # finally, convert the path to a relative one and return it
+        return self._from_normalized_path(path)
 
     def _move_recursive(self, old_path, new_path):
         """Updates path of all indexed files prefixed with `old_path` and
