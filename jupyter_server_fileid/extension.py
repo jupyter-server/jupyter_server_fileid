@@ -9,8 +9,6 @@ from jupyter_server_fileid.manager import (
     LocalFileIdManager,
 )
 
-from .handlers import FileId2PathHandler, FilePath2IdHandler
-
 
 class FileIdExtension(ExtensionApp):
 
@@ -66,17 +64,3 @@ class FileIdExtension(ExtensionApp):
             listener=cm_listener,
         )
         self.log.info("Attached event listeners.")
-
-    def initialize_handlers(self):
-        self.handlers.extend(
-            [
-                (
-                    r"/api/fileid/id/(.*)",
-                    FilePath2IdHandler,
-                ),
-                (
-                    r"/api/fileid/path/(.*)",
-                    FileId2PathHandler,
-                ),
-            ],
-        )
