@@ -327,7 +327,7 @@ def test_move_unindexed(any_fid_manager, old_path, new_path, fs_helpers):
 
     assert id is not None
     assert any_fid_manager.get_id(old_path) is None
-    assert any_fid_manager.get_id(new_path) is id
+    assert any_fid_manager.get_id(new_path) == id
     assert any_fid_manager.get_path(id) == new_path
 
 
