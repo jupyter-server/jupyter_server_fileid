@@ -2,6 +2,28 @@
 
 <!-- <START NEW CHANGELOG ENTRY> -->
 
+## 0.6.0
+
+([Full Changelog](https://github.com/jupyter-server/jupyter_server_fileid/compare/v0.5.0...328d893ff2323f20925e036e57eb62f302fa94e2))
+
+### Enhancements made
+
+- set default file ID manager to arbitrary [#37](https://github.com/jupyter-server/jupyter_server_fileid/pull/37) ([@dlqqq](https://github.com/dlqqq))
+- remove unused REST API [#36](https://github.com/jupyter-server/jupyter_server_fileid/pull/36) ([@dlqqq](https://github.com/dlqqq))
+- allow for recursive moves, copies, deletes in ArbitraryFileIdManager [#35](https://github.com/jupyter-server/jupyter_server_fileid/pull/35) ([@dlqqq](https://github.com/dlqqq))
+- prefix root dir to records in ArbitraryFileIdManager [#34](https://github.com/jupyter-server/jupyter_server_fileid/pull/34) ([@dlqqq](https://github.com/dlqqq))
+- use UUIDs for default file ID manager implementations [#30](https://github.com/jupyter-server/jupyter_server_fileid/pull/30) ([@dlqqq](https://github.com/dlqqq))
+- implement optimistic get_path() in LocalFileIdManager [#38](https://github.com/jupyter-server/jupyter_server_fileid/pull/38) ([@dlqqq](https://github.com/dlqqq))
+- Fix abstract base class definition [#33](https://github.com/jupyter-server/jupyter_server_fileid/pull/33) ([@kevin-bates](https://github.com/kevin-bates))
+
+### Contributors to this release
+
+([GitHub contributors page for this release](https://github.com/jupyter-server/jupyter_server_fileid/graphs/contributors?from=2022-10-25&to=2022-10-28&type=c))
+
+[@codecov-commenter](https://github.com/search?q=repo%3Ajupyter-server%2Fjupyter_server_fileid+involves%3Acodecov-commenter+updated%3A2022-10-25..2022-10-28&type=Issues) | [@dlqqq](https://github.com/search?q=repo%3Ajupyter-server%2Fjupyter_server_fileid+involves%3Adlqqq+updated%3A2022-10-25..2022-10-28&type=Issues) | [@kevin-bates](https://github.com/search?q=repo%3Ajupyter-server%2Fjupyter_server_fileid+involves%3Akevin-bates+updated%3A2022-10-25..2022-10-28&type=Issues) | [@welcome](https://github.com/search?q=repo%3Ajupyter-server%2Fjupyter_server_fileid+involves%3Awelcome+updated%3A2022-10-25..2022-10-28&type=Issues)
+
+<!-- <END NEW CHANGELOG ENTRY> -->
+
 ## 0.5.0
 
 ([Full Changelog](https://github.com/jupyter-server/jupyter_server_fileid/compare/v0.4.2...d968097b42f7b4d21fd851bd69c23a34098e675a))
@@ -17,8 +39,6 @@
 ([GitHub contributors page for this release](https://github.com/jupyter-server/jupyter_server_fileid/graphs/contributors?from=2022-10-21&to=2022-10-25&type=c))
 
 [@codecov-commenter](https://github.com/search?q=repo%3Ajupyter-server%2Fjupyter_server_fileid+involves%3Acodecov-commenter+updated%3A2022-10-21..2022-10-25&type=Issues) | [@davidbrochart](https://github.com/search?q=repo%3Ajupyter-server%2Fjupyter_server_fileid+involves%3Adavidbrochart+updated%3A2022-10-21..2022-10-25&type=Issues) | [@dlqqq](https://github.com/search?q=repo%3Ajupyter-server%2Fjupyter_server_fileid+involves%3Adlqqq+updated%3A2022-10-21..2022-10-25&type=Issues) | [@kevin-bates](https://github.com/search?q=repo%3Ajupyter-server%2Fjupyter_server_fileid+involves%3Akevin-bates+updated%3A2022-10-21..2022-10-25&type=Issues) | [@pre-commit-ci](https://github.com/search?q=repo%3Ajupyter-server%2Fjupyter_server_fileid+involves%3Apre-commit-ci+updated%3A2022-10-21..2022-10-25&type=Issues)
-
-<!-- <END NEW CHANGELOG ENTRY> -->
 
 ## 0.4.2
 
