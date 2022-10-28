@@ -106,6 +106,9 @@ def test_different_roots(
         db_path=fid_db_path, root_dir=str(jp_root_dir / test_path)
     )
 
+    print(jp_root_dir)
+    print(test_path_child)
+    print(os.path.basename(test_path_child))
     id_1 = fid_manager_1.index(test_path_child)
     id_2 = fid_manager_2.index(os.path.basename(test_path_child))
 
