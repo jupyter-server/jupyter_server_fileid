@@ -7,7 +7,7 @@ from abc import ABC, ABCMeta, abstractmethod
 from typing import Any, Callable, Dict, Optional
 
 from jupyter_core.paths import jupyter_data_dir
-from traitlets import Int, TraitError, Unicode, validate
+from traitlets import TraitError, Unicode, validate
 from traitlets.config.configurable import LoggingConfigurable
 
 
@@ -352,17 +352,6 @@ class LocalFileIdManager(BaseFileIdManager):
     performed during a method's procedure body.
     """
 
-    autosync_interval = Int(
-        default_value=5,
-        help=(
-            "How often to automatically invoke `sync_all()` when calling `get_path()`, in seconds. "
-            "Set to 0 to force `sync_all()` to always be called when calling `get_path()`. "
-            "Set to a negative value to disable autosync for `get_path()`."
-            "Defaults to 5."
-        ),
-        config=True,
-    )
-
     @validate("root_dir")
     def _validate_root_dir(self, proposal):
         if proposal["value"] is None:
@@ -661,18 +650,6 @@ class LocalFileIdManager(BaseFileIdManager):
             )
             return
 
-    def sync_all(self):
-        """
-        Syncs Files table with the filesystem and ensures that the correct path
-        is associated with each file ID.
-
-        Notes
-        -----
-        - Identical to `_sync_all()`, but is public and commits the transaction
-        upon invocation. See `_sync_all()` for more implementation details."""
-        self._sync_all()
-        self.con.commit()
-
     def index(self, path, stat_info=None, commit=True):
         """Returns the file ID for the file at `path`, creating a new file ID if
         one does not exist. Returns None only if file does not exist at path."""
@@ -718,20 +695,28 @@ class LocalFileIdManager(BaseFileIdManager):
 
         Notes
         -----
-        - To force syncing when calling `get_path()`, call `sync_all()` manually
+        - To force syncing when calling `get_path()`, call `_sync_all()` manually
         prior to calling `get_path()`.
         """
-        if (
-            self.autosync_interval >= 0
-            and (time.time() - self._last_sync) >= self.autosync_interval
-        ):
-            self._sync_all()
-
+        # optimistic approach: first check to see if path was not yet moved
         row = self.con.execute("SELECT path, ino FROM Files WHERE id = ?", (id,)).fetchone()
 
-        # if no record associated with ID, return None
-        if row is None:
+        # if file ID does not exist, return None
+        if not row:
             return None
+
+        path, ino = row
+        stat_info = self._stat(path)
+
+        if stat_info and ino == stat_info.ino and self._check_timestamps(stat_info):
+            # if file already exists at path and the ino and timestamps match,
+            # then return the correct path immediately (best case)
+            return self._from_normalized_path(path)
+
+        # otherwise, try again after calling _sync_all() to sync the Files table to the file tree
+        self._sync_all()
+        row = self.con.execute("SELECT path, ino FROM Files WHERE id = ?", (id,)).fetchone()
+        # file ID already guaranteed to exist from previous check
         path, ino = row
 
         # if file no longer exists at path, return None

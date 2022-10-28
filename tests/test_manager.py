@@ -304,6 +304,19 @@ def test_get_path_returns_api_path(jp_root_dir, fid_db_path):
     assert path == expected_path
 
 
+def test_optimistic_get_path(fid_manager, test_path, test_path_child):
+    """_sync_all() should never be called in the best case, in which no paths
+    were moved out-of-band."""
+    with patch.object(fid_manager, "_sync_all") as mock:
+        id_1 = fid_manager.index(test_path)
+        id_2 = fid_manager.index(test_path_child)
+
+        fid_manager.get_path(id_1)
+        fid_manager.get_path(id_2)
+
+        mock.assert_not_called()
+
+
 def test_get_path_oob_move(fid_manager, old_path, new_path, fs_helpers):
     id = fid_manager.index(old_path)
     fs_helpers.move(old_path, new_path)
@@ -340,7 +353,6 @@ def test_get_path_oob_move_back_to_original_path(fid_manager, old_path, new_path
 
     assert fid_manager.get_path(id) == new_path
     fs_helpers.move(new_path, old_path)
-    fid_manager.sync_all()
     assert fid_manager.get_path(id) == old_path
 
 
@@ -496,39 +508,3 @@ def test_save(any_fid_manager, test_path, fs_helpers):
     any_fid_manager.save(test_path)
 
     assert any_fid_manager.get_id(test_path) == id
-
-
-def test_autosync_gt_0(fid_manager, old_path, new_path, fs_helpers):
-    fid_manager.autosync_interval = 10
-    id = fid_manager.index(old_path)
-    fid_manager.sync_all()
-    fs_helpers.move(old_path, new_path)
-
-    assert fid_manager.get_path(id) != new_path
-    with patch("time.time") as mock_time:
-        mock_time.return_value = fid_manager._last_sync + 999
-        assert fid_manager.get_path(id) == new_path
-
-
-def test_autosync_eq_0(fid_manager, old_path, new_path, fs_helpers):
-    fid_manager.autosync_interval = 0
-    id = fid_manager.index(old_path)
-    fid_manager.sync_all()
-    fs_helpers.move(old_path, new_path)
-
-    assert fid_manager.get_path(id) == new_path
-
-
-def test_autosync_lt_0(fid_manager, old_path, new_path, fs_helpers):
-    fid_manager.autosync_interval = -10
-    id = fid_manager.index(old_path)
-    fid_manager.sync_all()
-    fs_helpers.move(old_path, new_path)
-
-    assert fid_manager.get_path(id) != new_path
-    with patch("time.time") as mock_time:
-        mock_time.return_value = fid_manager._last_sync + 999
-        assert fid_manager.get_path(id) != new_path
-
-    fid_manager.sync_all()
-    assert fid_manager.get_path(id) == new_path
