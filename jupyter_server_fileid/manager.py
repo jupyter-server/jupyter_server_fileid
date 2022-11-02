@@ -741,7 +741,9 @@ class LocalFileIdManager(BaseFileIdManager):
         """
         # optimistic approach: first check to see if path was not yet moved
         for retry in [True, False]:
-            row = self.con.execute("SELECT path, ino, crtime, mtime FROM Files WHERE id = ?", (id,)).fetchone()
+            row = self.con.execute(
+                "SELECT path, ino, crtime, mtime FROM Files WHERE id = ?", (id,)
+            ).fetchone()
 
             # if file ID does not exist, return None
             if not row:
@@ -750,7 +752,11 @@ class LocalFileIdManager(BaseFileIdManager):
             path, ino, crtime, mtime = row
             stat_info = self._stat(path)
 
-            if stat_info and ino == stat_info.ino and self._check_timestamps(stat_info, crtime, mtime):
+            if (
+                stat_info
+                and ino == stat_info.ino
+                and self._check_timestamps(stat_info, crtime, mtime)
+            ):
                 # if file already exists at path and the ino and timestamps match,
                 # then return the correct path immediately (best case)
                 return self._from_normalized_path(path)

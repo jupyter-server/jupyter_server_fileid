@@ -1,5 +1,6 @@
 import ntpath
 import os
+import posixpath
 from unittest.mock import patch
 
 import pytest
@@ -23,7 +24,8 @@ def test_path(fs_helpers):
 def test_path_child(test_path, fs_helpers):
     path = os.path.join(test_path, "child")
     fs_helpers.touch(path)
-    return path
+    # return api-style path
+    return posixpath.join(test_path, "child")
 
 
 @pytest.fixture
@@ -38,14 +40,16 @@ def old_path(fs_helpers):
 def old_path_child(old_path, fs_helpers):
     path = os.path.join(old_path, "child")
     fs_helpers.touch(path, dir=True)
-    return path
+    # return api-style path
+    return posixpath.join(old_path, "child")
 
 
 @pytest.fixture
 def old_path_grandchild(old_path_child, fs_helpers):
     path = os.path.join(old_path_child, "grandchild")
     fs_helpers.touch(path)
-    return path
+    # return api-style path
+    return posixpath.join(old_path_child, "grandchild")
 
 
 @pytest.fixture
@@ -56,17 +60,17 @@ def new_path():
 
 @pytest.fixture
 def new_path_child(new_path):
-    return os.path.join(new_path, "child")
+    return posixpath.join(new_path, "child")
 
 
 @pytest.fixture
 def new_path_grandchild(new_path_child):
-    return os.path.join(new_path_child, "grandchild")
+    return posixpath.join(new_path_child, "grandchild")
 
 
 def get_id_nosync(fid_manager, path):
     if not os.path.isabs(path):
-        path = os.path.join(fid_manager.root_dir, path)
+        path = os.path.normcase(posixpath.join(fid_manager.root_dir, path))
 
     row = fid_manager.con.execute("SELECT id FROM Files WHERE path = ?", (path,)).fetchone()
     return row and row[0]
@@ -79,7 +83,7 @@ def get_path_nosync(fid_manager, id):
     if path is None:
         return None
 
-    return os.path.relpath(path, fid_manager.root_dir)
+    return os.path.relpath(path, os.path.normcase(fid_manager.root_dir))
 
 
 def normalize_path(fid_manager: BaseFileIdManager, path: str) -> str:
@@ -95,7 +99,7 @@ def normalize_path(fid_manager: BaseFileIdManager, path: str) -> str:
     """
     if isinstance(fid_manager, LocalFileIdManager):
         path = os.path.normcase(path)
-    
+
     parts = path.strip("\\").split("\\")
     return "/".join(parts)
 
