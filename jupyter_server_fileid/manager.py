@@ -545,19 +545,10 @@ class LocalFileIdManager(BaseFileIdManager):
 
         scan_iter.close()
 
-    def _check_timestamps(self, stat_info):
+    def _check_timestamps(self, stat_info, src_crtime, src_mtime):
         """Returns True if the timestamps of a file match those recorded in the
         Files table. Returns False otherwise."""
 
-        src = self.con.execute(
-            "SELECT crtime, mtime FROM Files WHERE ino = ?", (stat_info.ino,)
-        ).fetchone()
-
-        # if no record with matching ino, then return None
-        if not src:
-            return False
-
-        src_crtime, src_mtime = src
         src_timestamp = src_crtime if src_crtime is not None else src_mtime
         dst_timestamp = stat_info.crtime if stat_info.crtime is not None else stat_info.mtime
         return src_timestamp == dst_timestamp
@@ -595,16 +586,16 @@ class LocalFileIdManager(BaseFileIdManager):
             return None
 
         src = self.con.execute(
-            "SELECT id, path FROM Files WHERE ino = ?", (stat_info.ino,)
+            "SELECT id, path, crtime, mtime FROM Files WHERE ino = ?", (stat_info.ino,)
         ).fetchone()
 
         # if ino is not in database, return None
         if src is None:
             return None
-        id, old_path = src
+        id, old_path, crtime, mtime = src
 
         # if timestamps don't match, delete existing record and return None
-        if not self._check_timestamps(stat_info):
+        if not self._check_timestamps(stat_info, crtime, mtime):
             self.con.execute("DELETE FROM Files WHERE id = ?", (id,))
             return None
 
@@ -749,38 +740,26 @@ class LocalFileIdManager(BaseFileIdManager):
         prior to calling `get_path()`.
         """
         # optimistic approach: first check to see if path was not yet moved
-        row = self.con.execute("SELECT path, ino FROM Files WHERE id = ?", (id,)).fetchone()
+        for retry in [True, False]:
+            row = self.con.execute("SELECT path, ino, crtime, mtime FROM Files WHERE id = ?", (id,)).fetchone()
 
-        # if file ID does not exist, return None
-        if not row:
+            # if file ID does not exist, return None
+            if not row:
+                return None
+
+            path, ino, crtime, mtime = row
+            stat_info = self._stat(path)
+
+            if stat_info and ino == stat_info.ino and self._check_timestamps(stat_info, crtime, mtime):
+                # if file already exists at path and the ino and timestamps match,
+                # then return the correct path immediately (best case)
+                return self._from_normalized_path(path)
+
+            # otherwise, try again after calling _sync_all() to sync the Files table to the file tree
+            if retry:
+                self._sync_all()
+        else:
             return None
-
-        path, ino = row
-        stat_info = self._stat(path)
-
-        if stat_info and ino == stat_info.ino and self._check_timestamps(stat_info):
-            # if file already exists at path and the ino and timestamps match,
-            # then return the correct path immediately (best case)
-            return self._from_normalized_path(path)
-
-        # otherwise, try again after calling _sync_all() to sync the Files table to the file tree
-        self._sync_all()
-        row = self.con.execute("SELECT path, ino FROM Files WHERE id = ?", (id,)).fetchone()
-        # file ID already guaranteed to exist from previous check
-        path, ino = row
-
-        # if file no longer exists at path, return None
-        stat_info = self._stat(path)
-        if stat_info is None:
-            return None
-
-        # if inode numbers or timestamps of the file and record don't match,
-        # return None
-        if ino != stat_info.ino or not self._check_timestamps(stat_info):
-            return None
-
-        # finally, convert the path to a relative one and return it
-        return self._from_normalized_path(path)
 
     @log(
         lambda self, old_path, new_path: f"Updating index following move from {old_path} to {new_path}.",
