@@ -68,9 +68,35 @@ def new_path_grandchild(new_path_child):
     return posixpath.join(new_path_child, "grandchild")
 
 
+def _normalize_path_local(fid_manager, path):
+    if os.path.commonprefix([fid_manager.root_dir, path]) != fid_manager.root_dir:
+        path = os.path.join(fid_manager.root_dir, path)
+
+    path = os.path.normcase(path)
+    path = os.path.normpath(path)
+    return path
+
+
+def _normalize_separators(path):
+    parts = path.strip("\\").split("\\")
+    return "/".join(parts)
+
+
+def _normalize_path_arbitrary(fid_manager, path):
+    norm_root_dir = _normalize_separators(fid_manager.root_dir)
+    if posixpath.commonprefix([norm_root_dir, path]) != norm_root_dir:
+        path = posixpath.join(norm_root_dir, path)
+
+    path = _normalize_separators(path)
+    return path
+
+
 def get_id_nosync(fid_manager, path):
-    if not os.path.isabs(path):
-        path = normalize_path(fid_manager, posixpath.join(fid_manager.root_dir, path))
+    # We need to first put the path into a form the fileId manager implementation will for persistence.
+    if isinstance(fid_manager, LocalFileIdManager):
+        path = _normalize_path_local(fid_manager, path)
+    else:
+        path = _normalize_path_arbitrary(fid_manager, path)
 
     row = fid_manager.con.execute("SELECT id FROM Files WHERE path = ?", (path,)).fetchone()
     return row and row[0]
