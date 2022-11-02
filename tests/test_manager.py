@@ -94,7 +94,7 @@ def normalize_path(fid_manager: BaseFileIdManager, path: str) -> str:
     manager must be filesystem agnostic.
     """
     if isinstance(fid_manager, LocalFileIdManager):
-        return os.path.normcase(path)
+        path = os.path.normcase(path)
     
     parts = path.strip("\\").split("\\")
     return "/".join(parts)
