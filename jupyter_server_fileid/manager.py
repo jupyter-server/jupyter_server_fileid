@@ -434,16 +434,18 @@ class LocalFileIdManager(BaseFileIdManager):
         return path
 
     def _from_normalized_path(self, path: Optional[str]) -> Optional[str]:
-        """Accepts a filesystem path and returns an API path, i.e. one relative
-        to root_dir and uses forward slashes as the path separator. Returns
-        `None` if the given path is None or is not relative to root_dir."""
+        """Accepts a "persisted" filesystem path and returns an API path, i.e.
+        one relative to root_dir and uses forward slashes as the path separator.
+        Returns `None` if the given path is None or is not relative to root_dir.
+        """
         if path is None:
             return None
 
-        if os.path.commonprefix([self.root_dir, path]) != self.root_dir:
+        norm_root_dir = os.path.normcase(self.root_dir)
+        if os.path.commonprefix([norm_root_dir, path]) != norm_root_dir:
             return None
 
-        relpath = os.path.relpath(path, self.root_dir)
+        relpath = os.path.relpath(path, norm_root_dir)
         # always use forward slashes to delimit children
         relpath = relpath.replace(os.path.sep, "/")
 
