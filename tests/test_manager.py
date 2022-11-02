@@ -70,7 +70,7 @@ def new_path_grandchild(new_path_child):
 
 def get_id_nosync(fid_manager, path):
     if not os.path.isabs(path):
-        path = os.path.normcase(posixpath.join(fid_manager.root_dir, path))
+        path = normalize_path(fid_manager, posixpath.join(fid_manager.root_dir, path))
 
     row = fid_manager.con.execute("SELECT id FROM Files WHERE path = ?", (path,)).fetchone()
     return row and row[0]
