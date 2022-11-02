@@ -1,6 +1,7 @@
 import ntpath
 import os
 import posixpath
+import sys
 from unittest.mock import patch
 
 import pytest
@@ -186,6 +187,10 @@ def test_index_already_indexed(any_fid_manager, test_path):
     assert id == any_fid_manager.index(test_path)
 
 
+@pytest.mark.skipif(
+    sys.version_info < (3, 8) and sys.platform.startswith("win"),
+    reason="symbolic links on Windows Python 3.7 not behaving like 3.8+",
+)
 def test_index_symlink(fid_manager, test_path):
     link_path = os.path.join(fid_manager.root_dir, "link_path")
     os.symlink(os.path.join(fid_manager.root_dir, test_path), link_path)
