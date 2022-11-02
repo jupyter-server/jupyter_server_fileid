@@ -1,4 +1,5 @@
 import os
+import posixpath
 import sqlite3
 import stat
 import time
@@ -7,6 +8,7 @@ from abc import ABC, ABCMeta, abstractmethod
 from typing import Any, Callable, Dict, Optional
 
 from jupyter_core.paths import jupyter_data_dir
+from jupyter_server.utils import to_api_path
 from traitlets import TraitError, Unicode, validate
 from traitlets.config.configurable import LoggingConfigurable
 
@@ -78,56 +80,43 @@ class BaseFileIdManager(ABC, LoggingConfigurable, metaclass=FileIdManagerMeta):
     def _uuid() -> str:
         return str(uuid.uuid4())
 
+    @abstractmethod
     def _normalize_path(self, path: str) -> str:
-        """Accepts an API path and returns a filesystem path, i.e. one prefixed
-        by root_dir and uses os.path.sep."""
-        # use commonprefix instead of commonpath, since root_dir may not be a
-        # absolute POSIX path.
-        if os.path.commonprefix([self.root_dir, path]) != self.root_dir:
-            path = os.path.join(self.root_dir, path)
+        """Accepts an API path and returns a "persistable" path, i.e. one prefixed
+        by root_dir that can then be persisted in a format relative to the implementation."""
+        pass
 
-        return path
-
+    @abstractmethod
     def _from_normalized_path(self, path: Optional[str]) -> Optional[str]:
-        """Accepts a filesystem path and returns an API path, i.e. one relative
+        """Accepts a "persistable" path and returns an API path, i.e. one relative
         to root_dir and uses forward slashes as the path separator. Returns
         `None` if the given path is None or is not relative to root_dir."""
-        if path is None:
-            return None
+        pass
 
-        if os.path.commonprefix([self.root_dir, path]) != self.root_dir:
-            return None
-
-        relpath = os.path.relpath(path, self.root_dir)
-        # always use forward slashes to delimit children
-        relpath = relpath.replace(os.path.sep, "/")
-
-        return relpath
-
-    def _move_recursive(self, old_path: str, new_path: str, sep: str = os.path.sep) -> None:
+    def _move_recursive(self, old_path: str, new_path: str, path_mgr: Any = os.path) -> None:
         """Move all children of a given directory at `old_path` to a new
         directory at `new_path`, delimited by `sep`."""
-        old_path_glob = old_path + sep + "*"
+        old_path_glob = old_path + path_mgr.sep + "*"
         records = self.con.execute(
             "SELECT id, path FROM Files WHERE path GLOB ?", (old_path_glob,)
         ).fetchall()
 
         for record in records:
             id, old_recpath = record
-            new_recpath = os.path.join(new_path, os.path.relpath(old_recpath, start=old_path))
+            new_recpath = path_mgr.join(new_path, path_mgr.relpath(old_recpath, start=old_path))
             self.con.execute("UPDATE Files SET path = ? WHERE id = ?", (new_recpath, id))
 
-    def _copy_recursive(self, from_path: str, to_path: str, sep: str = os.path.sep) -> None:
+    def _copy_recursive(self, from_path: str, to_path: str, path_mgr: Any = os.path) -> None:
         """Copy all children of a given directory at `from_path` to a new
         directory at `to_path`, delimited by `sep`."""
-        from_path_glob = from_path + sep + "*"
+        from_path_glob = from_path + path_mgr.sep + "*"
         records = self.con.execute(
             "SELECT path FROM Files WHERE path GLOB ?", (from_path_glob,)
         ).fetchall()
 
         for record in records:
             (from_recpath,) = record
-            to_recpath = os.path.join(to_path, os.path.relpath(from_recpath, start=from_path))
+            to_recpath = path_mgr.join(to_path, path_mgr.relpath(from_recpath, start=from_path))
             self.con.execute(
                 "INSERT INTO Files (id, path) VALUES (?, ?)", (self._uuid(), to_recpath)
             )
@@ -254,6 +243,35 @@ class ArbitraryFileIdManager(BaseFileIdManager):
         self.con.execute("CREATE INDEX IF NOT EXISTS ix_Files_path ON Files (path)")
         self.con.commit()
 
+    def _normalize_path(self, path):
+        """Accepts an API path and returns a "persistable" path, i.e. one prefixed
+        by root_dir that can then be persisted in a format relative to the implementation."""
+        # use commonprefix instead of commonpath, since root_dir may not be a
+        # absolute POSIX path.
+        if posixpath.commonprefix([self.root_dir, path]) != self.root_dir:
+            path = posixpath.join(self.root_dir, path)
+
+        # Note.  We're converting the included root_dir value as well.
+        path = to_api_path(path)
+
+        return path
+
+    def _from_normalized_path(self, path: Optional[str]) -> Optional[str]:
+        """Accepts a "persistable" path and returns an API path, i.e. one relative
+        to root_dir and uses forward slashes as the path separator. Returns
+        `None` if the given path is None or is not relative to root_dir."""
+        if path is None:
+            return None
+
+        # Convert root_dir to an api path, since that's essentially what we persist.
+        api_root_dir = to_api_path(self.root_dir)
+        if posixpath.commonprefix([api_root_dir, path]) != api_root_dir:
+            return None
+
+        relpath = to_api_path(path, api_root_dir)
+
+        return relpath
+
     def _create(self, path: str) -> str:
         path = self._normalize_path(path)
         id = self._uuid()
@@ -291,7 +309,7 @@ class ArbitraryFileIdManager(BaseFileIdManager):
 
         if id:
             self.con.execute("UPDATE Files SET path = ? WHERE path = ?", (new_path, old_path))
-            self._move_recursive(old_path, new_path, "/")
+            self._move_recursive(old_path, new_path, posixpath)
         else:
             id = self._create(new_path)
 
@@ -395,11 +413,32 @@ class LocalFileIdManager(BaseFileIdManager):
         self.con.commit()
 
     def _normalize_path(self, path):
-        path = super()._normalize_path(path)
+        """Accepts an API path and returns a filesystem path, i.e. one prefixed
+        by root_dir and uses os.path.sep."""
+        # use commonprefix instead of commonpath, since root_dir may not be a
+        # absolute POSIX path.
+        if os.path.commonprefix([self.root_dir, path]) != self.root_dir:
+            path = os.path.join(self.root_dir, path)
+
         path = os.path.normcase(path)
         path = os.path.normpath(path)
-
         return path
+
+    def _from_normalized_path(self, path: Optional[str]) -> Optional[str]:
+        """Accepts a filesystem path and returns an API path, i.e. one relative
+        to root_dir and uses forward slashes as the path separator. Returns
+        `None` if the given path is None or is not relative to root_dir."""
+        if path is None:
+            return None
+
+        if os.path.commonprefix([self.root_dir, path]) != self.root_dir:
+            return None
+
+        relpath = os.path.relpath(path, self.root_dir)
+        # always use forward slashes to delimit children
+        relpath = relpath.replace(os.path.sep, "/")
+
+        return relpath
 
     def _index_all(self):
         """Recursively indexes all directories under the server root."""
