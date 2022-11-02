@@ -5,7 +5,11 @@ from unittest.mock import patch
 import pytest
 from traitlets import TraitError
 
-from jupyter_server_fileid.manager import ArbitraryFileIdManager, BaseFileIdManager, LocalFileIdManager
+from jupyter_server_fileid.manager import (
+    ArbitraryFileIdManager,
+    BaseFileIdManager,
+    LocalFileIdManager,
+)
 
 
 @pytest.fixture
@@ -78,15 +82,22 @@ def get_path_nosync(fid_manager, id):
     return os.path.relpath(path, fid_manager.root_dir)
 
 
-def normalize_case(fid_manager: BaseFileIdManager, path: str) -> str:
-    """Normalize case based on operating system and FileIdManager instance.
+def normalize_path(fid_manager: BaseFileIdManager, path: str) -> str:
+    """Normalize path or case based on operating system and FileIdManager instance.
 
     When testing instances of LocalFileIdManager, we need to normalize the
-    case relative to the OS when comparing results of get_path(), otherwise not.
+    case relative to the OS when comparing results of get_path() since Windows
+    is case-insensitive.
+
+    When testing instances of ArbitraryFileIdManager, we need to normalize the
+    path, regardless of OS, when comparing results of get_path() since this fileID
+    manager must be filesystem agnostic.
     """
     if isinstance(fid_manager, LocalFileIdManager):
         return os.path.normcase(path)
-    return path
+    
+    parts = path.strip("\\").split("\\")
+    return "/".join(parts)
 
 
 def test_validates_root_dir(fid_db_path):
@@ -154,7 +165,7 @@ def test_index_symlink(fid_manager, test_path):
     # ID. get_path() *sometimes* returns the real path if _sync_file() happens
     # to be called on the real path after the symlink path when _sync_all() is
     # run, causing this test to flakily pass when it shouldn't.
-    assert get_path_nosync(fid_manager, id) == normalize_case(fid_manager, test_path)
+    assert get_path_nosync(fid_manager, id) == normalize_path(fid_manager, test_path)
 
 
 # test out-of-band move detection for FIM.index()
@@ -173,7 +184,7 @@ def test_index_after_deleting_dir_in_same_path(fid_manager, test_path, fs_helper
 
     assert old_id != new_id
     assert fid_manager.get_path(old_id) is None
-    assert fid_manager.get_path(new_id) == normalize_case(fid_manager, test_path)
+    assert fid_manager.get_path(new_id) == normalize_path(fid_manager, test_path)
 
 
 def test_index_after_deleting_regfile_in_same_path(fid_manager, test_path_child, fs_helpers):
@@ -185,7 +196,7 @@ def test_index_after_deleting_regfile_in_same_path(fid_manager, test_path_child,
 
     assert old_id != new_id
     assert fid_manager.get_path(old_id) is None
-    assert fid_manager.get_path(new_id) == normalize_case(fid_manager, test_path_child)
+    assert fid_manager.get_path(new_id) == normalize_path(fid_manager, test_path_child)
 
 
 @pytest.fixture
@@ -222,7 +233,7 @@ def test_getters_indexed(any_fid_manager, test_path):
     id = any_fid_manager.index(test_path)
 
     assert any_fid_manager.get_id(test_path) == id
-    assert any_fid_manager.get_path(id) == normalize_case(any_fid_manager, test_path)
+    assert any_fid_manager.get_path(id) == normalize_path(any_fid_manager, test_path)
 
 
 def test_getters_nonnormalized(fid_manager, test_path, fs_helpers):
@@ -284,7 +295,7 @@ def test_get_id_oob_move_new_file_at_old_path(fid_manager, old_path, new_path, f
 
     assert other_id != old_id
     assert fid_manager.get_id(new_path) == old_id
-    assert fid_manager.get_path(old_id) == normalize_case(fid_manager, new_path)
+    assert fid_manager.get_path(old_id) == normalize_path(fid_manager, new_path)
     assert fid_manager.get_id(other_path) == other_id
 
 
@@ -293,13 +304,9 @@ def test_get_path_arbitrary_preserves_path(arbitrary_fid_manager):
     receives."""
     path = "AbCd.txt"
     id = arbitrary_fid_manager.index(path)
-    assert normalize_case(arbitrary_fid_manager, path) == arbitrary_fid_manager.get_path(id)
+    assert normalize_path(arbitrary_fid_manager, path) == arbitrary_fid_manager.get_path(id)
 
 
-@patch("os.path.sep", new="\\")
-@patch("os.path.relpath", new=ntpath.relpath)
-@patch("os.path.normpath", new=ntpath.normpath)
-@patch("os.path.join", new=ntpath.join)
 def test_get_path_returns_api_path(jp_root_dir, fid_db_path):
     """Tests whether get_path() method always returns an API path, i.e. one
     relative to the server root and one delimited by forward slashes (even if
@@ -312,7 +319,7 @@ def test_get_path_returns_api_path(jp_root_dir, fid_db_path):
 
     id = manager.index(test_path)
     path = manager.get_path(id)
-    assert path == normalize_case(manager, expected_path)
+    assert path == normalize_path(manager, expected_path)
 
 
 def test_optimistic_get_path(fid_manager, test_path, test_path_child):
@@ -331,7 +338,7 @@ def test_optimistic_get_path(fid_manager, test_path, test_path_child):
 def test_get_path_oob_move(fid_manager, old_path, new_path, fs_helpers):
     id = fid_manager.index(old_path)
     fs_helpers.move(old_path, new_path)
-    assert fid_manager.get_path(id) == normalize_case(fid_manager, new_path)
+    assert fid_manager.get_path(id) == normalize_path(fid_manager, new_path)
 
 
 def test_get_path_oob_move_recursive(
@@ -342,8 +349,8 @@ def test_get_path_oob_move_recursive(
 
     fs_helpers.move(old_path, new_path)
 
-    assert fid_manager.get_path(id) == normalize_case(fid_manager, new_path)
-    assert fid_manager.get_path(child_id) == normalize_case(fid_manager, new_path_child)
+    assert fid_manager.get_path(id) == normalize_path(fid_manager, new_path)
+    assert fid_manager.get_path(child_id) == normalize_path(fid_manager, new_path_child)
 
 
 def test_get_path_oob_move_into_unindexed(
@@ -355,16 +362,16 @@ def test_get_path_oob_move_into_unindexed(
     fs_helpers.touch(new_path, dir=True)
     fs_helpers.move(old_path_child, new_path_child)
 
-    assert fid_manager.get_path(id) == normalize_case(fid_manager, new_path_child)
+    assert fid_manager.get_path(id) == normalize_path(fid_manager, new_path_child)
 
 
 def test_get_path_oob_move_back_to_original_path(fid_manager, old_path, new_path, fs_helpers):
     id = fid_manager.index(old_path)
     fs_helpers.move(old_path, new_path)
 
-    assert fid_manager.get_path(id) == normalize_case(fid_manager, new_path)
+    assert fid_manager.get_path(id) == normalize_path(fid_manager, new_path)
     fs_helpers.move(new_path, old_path)
-    assert fid_manager.get_path(id) == normalize_case(fid_manager, old_path)
+    assert fid_manager.get_path(id) == normalize_path(fid_manager, old_path)
 
 
 # move file into an indexed-but-moved directory
@@ -380,7 +387,7 @@ def test_get_path_oob_move_nested(fid_manager, old_path, new_path, stub_stat_crt
     fs_helpers.move(old_path, new_path)
     fs_helpers.move(old_test_path, new_test_path)
 
-    assert fid_manager.get_path(id) == normalize_case(fid_manager, new_test_path)
+    assert fid_manager.get_path(id) == normalize_path(fid_manager, new_test_path)
 
 
 # move file into directory within an indexed-but-moved directory
@@ -399,7 +406,7 @@ def test_get_path_oob_move_deeply_nested(
     fs_helpers.move(old_path, new_path)
     fs_helpers.move(old_test_path, new_test_path)
 
-    assert fid_manager.get_path(id) == normalize_case(fid_manager, new_test_path)
+    assert fid_manager.get_path(id) == normalize_path(fid_manager, new_test_path)
 
 
 def test_move_unindexed(any_fid_manager, old_path, new_path, fs_helpers):
@@ -409,7 +416,7 @@ def test_move_unindexed(any_fid_manager, old_path, new_path, fs_helpers):
     assert id is not None
     assert any_fid_manager.get_id(old_path) is None
     assert any_fid_manager.get_id(new_path) == id
-    assert any_fid_manager.get_path(id) == normalize_case(any_fid_manager, new_path)
+    assert any_fid_manager.get_path(id) == normalize_path(any_fid_manager, new_path)
 
 
 def test_move_indexed(any_fid_manager, old_path, new_path, fs_helpers):
@@ -421,7 +428,7 @@ def test_move_indexed(any_fid_manager, old_path, new_path, fs_helpers):
     assert old_id == new_id
     assert any_fid_manager.get_id(old_path) is None
     assert any_fid_manager.get_id(new_path) == new_id
-    assert any_fid_manager.get_path(old_id) == normalize_case(any_fid_manager, new_path)
+    assert any_fid_manager.get_path(old_id) == normalize_path(any_fid_manager, new_path)
 
 
 # test for disjoint move handling

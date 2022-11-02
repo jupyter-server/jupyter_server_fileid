@@ -8,7 +8,6 @@ from abc import ABC, ABCMeta, abstractmethod
 from typing import Any, Callable, Dict, Optional
 
 from jupyter_core.paths import jupyter_data_dir
-from jupyter_server.utils import to_api_path
 from traitlets import TraitError, Unicode, validate
 from traitlets.config.configurable import LoggingConfigurable
 
@@ -121,9 +120,9 @@ class BaseFileIdManager(ABC, LoggingConfigurable, metaclass=FileIdManagerMeta):
                 "INSERT INTO Files (id, path) VALUES (?, ?)", (self._uuid(), to_recpath)
             )
 
-    def _delete_recursive(self, path: str, sep: str = os.path.sep) -> None:
+    def _delete_recursive(self, path: str, path_mgr: Any = os.path) -> None:
         """Delete all children of a given directory, delimited by `sep`."""
-        path_glob = path + sep + "*"
+        path_glob = path + path_mgr.sep + "*"
         self.con.execute("DELETE FROM Files WHERE path GLOB ?", (path_glob,))
 
     @abstractmethod
@@ -243,16 +242,24 @@ class ArbitraryFileIdManager(BaseFileIdManager):
         self.con.execute("CREATE INDEX IF NOT EXISTS ix_Files_path ON Files (path)")
         self.con.commit()
 
+    @staticmethod
+    def _normalize_separators(path):
+        """Replaces backslashes with forward slashes, removing adjacent slashes."""
+
+        parts = path.strip("\\").split("\\")
+        return "/".join(parts)
+
     def _normalize_path(self, path):
         """Accepts an API path and returns a "persistable" path, i.e. one prefixed
         by root_dir that can then be persisted in a format relative to the implementation."""
         # use commonprefix instead of commonpath, since root_dir may not be a
         # absolute POSIX path.
-        if posixpath.commonprefix([self.root_dir, path]) != self.root_dir:
-            path = posixpath.join(self.root_dir, path)
 
-        # Note.  We're converting the included root_dir value as well.
-        path = to_api_path(path)
+        norm_root_dir = self._normalize_separators(self.root_dir)
+        if posixpath.commonprefix([norm_root_dir, path]) != norm_root_dir:
+            path = posixpath.join(norm_root_dir, path)
+
+        path = self._normalize_separators(path)
 
         return path
 
@@ -264,11 +271,13 @@ class ArbitraryFileIdManager(BaseFileIdManager):
             return None
 
         # Convert root_dir to an api path, since that's essentially what we persist.
-        api_root_dir = to_api_path(self.root_dir)
-        if posixpath.commonprefix([api_root_dir, path]) != api_root_dir:
+        norm_root_dir = self._normalize_separators(self.root_dir)
+        if posixpath.commonprefix([norm_root_dir, path]) != norm_root_dir:
             return None
 
-        relpath = to_api_path(path, api_root_dir)
+        relpath = path
+        if path.startswith(norm_root_dir):
+            relpath = path[len(norm_root_dir) + 1 :]
 
         return relpath
 
@@ -321,7 +330,7 @@ class ArbitraryFileIdManager(BaseFileIdManager):
         to_path = self._normalize_path(to_path)
 
         id = self._create(to_path)
-        self._copy_recursive(from_path, to_path, "/")
+        self._copy_recursive(from_path, to_path, posixpath)
 
         self.con.commit()
         return id
@@ -330,7 +339,7 @@ class ArbitraryFileIdManager(BaseFileIdManager):
         path = self._normalize_path(path)
 
         self.con.execute("DELETE FROM Files WHERE path = ?", (path,))
-        self._delete_recursive(path, "/")
+        self._delete_recursive(path, posixpath)
 
         self.con.commit()
 
