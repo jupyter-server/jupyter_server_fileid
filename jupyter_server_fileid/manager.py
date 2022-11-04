@@ -220,6 +220,15 @@ class ArbitraryFileIdManager(BaseFileIdManager):
     Server 2.
     """
 
+    @validate("root_dir")
+    def _validate_root_dir(self, proposal):
+        # Convert root_dir to an api path, since that's essentially what we persist.
+        if proposal["value"] is None:
+            return ""
+
+        normalized_content_root = self._normalize_separators(proposal["value"])
+        return normalized_content_root
+
     def __init__(self, *args, **kwargs):
         # pass args and kwargs to parent Configurable
         super().__init__(*args, **kwargs)
@@ -255,10 +264,10 @@ class ArbitraryFileIdManager(BaseFileIdManager):
         # use commonprefix instead of commonpath, since root_dir may not be a
         # absolute POSIX path.
 
-        norm_root_dir = self._normalize_separators(self.root_dir)
+        # norm_root_dir = self._normalize_separators(self.root_dir)
         path = self._normalize_separators(path)
-        if posixpath.commonprefix([norm_root_dir, path]) != norm_root_dir:
-            path = posixpath.join(norm_root_dir, path)
+        if posixpath.commonprefix([self.root_dir, path]) != self.root_dir:
+            path = posixpath.join(self.root_dir, path)
 
         return path
 
@@ -270,11 +279,11 @@ class ArbitraryFileIdManager(BaseFileIdManager):
             return None
 
         # Convert root_dir to an api path, since that's essentially what we persist.
-        norm_root_dir = self._normalize_separators(self.root_dir)
-        if posixpath.commonprefix([norm_root_dir, path]) != norm_root_dir:
+        # norm_root_dir = self._normalize_separators(self.root_dir)
+        if posixpath.commonprefix([self.root_dir, path]) != self.root_dir:
             return None
 
-        relpath = posixpath.relpath(path, norm_root_dir)
+        relpath = posixpath.relpath(path, self.root_dir)
         return relpath
 
     def _create(self, path: str) -> str:
