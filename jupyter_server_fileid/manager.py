@@ -256,10 +256,9 @@ class ArbitraryFileIdManager(BaseFileIdManager):
         # absolute POSIX path.
 
         norm_root_dir = self._normalize_separators(self.root_dir)
+        path = self._normalize_separators(path)
         if posixpath.commonprefix([norm_root_dir, path]) != norm_root_dir:
             path = posixpath.join(norm_root_dir, path)
-
-        path = self._normalize_separators(path)
 
         return path
 
@@ -275,10 +274,7 @@ class ArbitraryFileIdManager(BaseFileIdManager):
         if posixpath.commonprefix([norm_root_dir, path]) != norm_root_dir:
             return None
 
-        relpath = path
-        if path.startswith(norm_root_dir):
-            relpath = path[len(norm_root_dir) + 1 :]
-
+        relpath = posixpath.relpath(path, norm_root_dir)
         return relpath
 
     def _create(self, path: str) -> str:
@@ -422,10 +418,7 @@ class LocalFileIdManager(BaseFileIdManager):
         self.con.commit()
 
     def _normalize_path(self, path):
-        """Accepts an API path and returns a filesystem path, i.e. one prefixed
-        by root_dir and uses os.path.sep."""
-        # use commonprefix instead of commonpath, since root_dir may not be a
-        # absolute POSIX path.
+        """Accepts an API path and returns a filesystem path, i.e. one prefixed by root_dir."""
         if os.path.commonprefix([self.root_dir, path]) != self.root_dir:
             path = os.path.join(self.root_dir, path)
 
@@ -764,8 +757,9 @@ class LocalFileIdManager(BaseFileIdManager):
             # otherwise, try again after calling _sync_all() to sync the Files table to the file tree
             if retry:
                 self._sync_all()
-        else:
-            return None
+
+        # If we're here, the retry didn't work.
+        return None
 
     @log(
         lambda self, old_path, new_path: f"Updating index following move from {old_path} to {new_path}.",
