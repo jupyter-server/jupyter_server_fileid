@@ -1,11 +1,17 @@
 import ntpath
 import os
+import posixpath
+import sys
 from unittest.mock import patch
 
 import pytest
 from traitlets import TraitError
 
-from jupyter_server_fileid.manager import ArbitraryFileIdManager, LocalFileIdManager
+from jupyter_server_fileid.manager import (
+    ArbitraryFileIdManager,
+    BaseFileIdManager,
+    LocalFileIdManager,
+)
 
 
 @pytest.fixture
@@ -19,7 +25,8 @@ def test_path(fs_helpers):
 def test_path_child(test_path, fs_helpers):
     path = os.path.join(test_path, "child")
     fs_helpers.touch(path)
-    return path
+    # return api-style path
+    return posixpath.join(test_path, "child")
 
 
 @pytest.fixture
@@ -34,14 +41,16 @@ def old_path(fs_helpers):
 def old_path_child(old_path, fs_helpers):
     path = os.path.join(old_path, "child")
     fs_helpers.touch(path, dir=True)
-    return path
+    # return api-style path
+    return posixpath.join(old_path, "child")
 
 
 @pytest.fixture
 def old_path_grandchild(old_path_child, fs_helpers):
     path = os.path.join(old_path_child, "grandchild")
     fs_helpers.touch(path)
-    return path
+    # return api-style path
+    return posixpath.join(old_path_child, "grandchild")
 
 
 @pytest.fixture
@@ -52,17 +61,42 @@ def new_path():
 
 @pytest.fixture
 def new_path_child(new_path):
-    return os.path.join(new_path, "child")
+    return posixpath.join(new_path, "child")
 
 
 @pytest.fixture
 def new_path_grandchild(new_path_child):
-    return os.path.join(new_path_child, "grandchild")
+    return posixpath.join(new_path_child, "grandchild")
+
+
+def _normalize_path_local(fid_manager, path):
+    if os.path.commonprefix([fid_manager.root_dir, path]) != fid_manager.root_dir:
+        path = os.path.join(fid_manager.root_dir, path)
+
+    path = os.path.normcase(path)
+    path = os.path.normpath(path)
+    return path
+
+
+def _normalize_separators(path):
+    parts = path.strip("\\").split("\\")
+    return "/".join(parts)
+
+
+def _normalize_path_arbitrary(fid_manager, path):
+    if posixpath.commonprefix([fid_manager.root_dir, path]) != fid_manager.root_dir:
+        path = posixpath.join(fid_manager.root_dir, path)
+
+    path = _normalize_separators(path)
+    return path
 
 
 def get_id_nosync(fid_manager, path):
-    if not os.path.isabs(path):
-        path = os.path.join(fid_manager.root_dir, path)
+    # We need to first put the path into a form the fileId manager implementation will for persistence.
+    if isinstance(fid_manager, LocalFileIdManager):
+        path = _normalize_path_local(fid_manager, path)
+    else:
+        path = _normalize_path_arbitrary(fid_manager, path)
 
     row = fid_manager.con.execute("SELECT id FROM Files WHERE path = ?", (path,)).fetchone()
     return row and row[0]
@@ -75,7 +109,25 @@ def get_path_nosync(fid_manager, id):
     if path is None:
         return None
 
-    return os.path.relpath(path, fid_manager.root_dir)
+    return os.path.relpath(path, os.path.normcase(fid_manager.root_dir))
+
+
+def normalize_path(fid_manager: BaseFileIdManager, path: str) -> str:
+    """Normalize path or case based on operating system and FileIdManager instance.
+
+    When testing instances of LocalFileIdManager, we need to normalize the
+    case relative to the OS when comparing results of get_path() since Windows
+    is case-insensitive.
+
+    When testing instances of ArbitraryFileIdManager, we need to normalize the
+    path, regardless of OS, when comparing results of get_path() since this fileID
+    manager must be filesystem agnostic.
+    """
+    if isinstance(fid_manager, LocalFileIdManager):
+        path = os.path.normcase(path)
+
+    parts = path.strip("\\").split("\\")
+    return "/".join(parts)
 
 
 def test_validates_root_dir(fid_db_path):
@@ -86,7 +138,7 @@ def test_validates_root_dir(fid_db_path):
     afm = ArbitraryFileIdManager(root_dir=root_dir, db_path=fid_db_path)
     assert afm.root_dir == root_dir
     afm2 = ArbitraryFileIdManager(root_dir=None, db_path=fid_db_path)
-    assert afm2.root_dir is None
+    assert afm2.root_dir == ""
 
 
 def test_validates_db_path(jp_root_dir, any_fid_manager_class):
@@ -134,6 +186,10 @@ def test_index_already_indexed(any_fid_manager, test_path):
     assert id == any_fid_manager.index(test_path)
 
 
+@pytest.mark.skipif(
+    sys.version_info < (3, 8) and sys.platform.startswith("win"),
+    reason="symbolic links on Windows Python 3.7 not behaving like 3.8+",
+)
 def test_index_symlink(fid_manager, test_path):
     link_path = os.path.join(fid_manager.root_dir, "link_path")
     os.symlink(os.path.join(fid_manager.root_dir, test_path), link_path)
@@ -285,10 +341,6 @@ def test_get_path_arbitrary_preserves_path(arbitrary_fid_manager):
     assert path == arbitrary_fid_manager.get_path(id)
 
 
-@patch("os.path.sep", new="\\")
-@patch("os.path.relpath", new=ntpath.relpath)
-@patch("os.path.normpath", new=ntpath.normpath)
-@patch("os.path.join", new=ntpath.join)
 def test_get_path_returns_api_path(jp_root_dir, fid_db_path):
     """Tests whether get_path() method always returns an API path, i.e. one
     relative to the server root and one delimited by forward slashes (even if
@@ -369,7 +421,7 @@ def test_get_path_oob_move_nested(fid_manager, old_path, new_path, stub_stat_crt
     fs_helpers.move(old_path, new_path)
     fs_helpers.move(old_test_path, new_test_path)
 
-    assert fid_manager.get_path(id) == new_test_path
+    assert fid_manager.get_path(id) == normalize_path(fid_manager, new_test_path)
 
 
 # move file into directory within an indexed-but-moved directory
@@ -388,7 +440,7 @@ def test_get_path_oob_move_deeply_nested(
     fs_helpers.move(old_path, new_path)
     fs_helpers.move(old_test_path, new_test_path)
 
-    assert fid_manager.get_path(id) == new_test_path
+    assert fid_manager.get_path(id) == normalize_path(fid_manager, new_test_path)
 
 
 def test_move_unindexed(any_fid_manager, old_path, new_path, fs_helpers):

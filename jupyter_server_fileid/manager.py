@@ -1,4 +1,5 @@
 import os
+import posixpath
 import sqlite3
 import stat
 import time
@@ -78,63 +79,50 @@ class BaseFileIdManager(ABC, LoggingConfigurable, metaclass=FileIdManagerMeta):
     def _uuid() -> str:
         return str(uuid.uuid4())
 
+    @abstractmethod
     def _normalize_path(self, path: str) -> str:
-        """Accepts an API path and returns a filesystem path, i.e. one prefixed
-        by root_dir and uses os.path.sep."""
-        # use commonprefix instead of commonpath, since root_dir may not be a
-        # absolute POSIX path.
-        if os.path.commonprefix([self.root_dir, path]) != self.root_dir:
-            path = os.path.join(self.root_dir, path)
+        """Accepts an API path and returns a "persistable" path, i.e. one prefixed
+        by root_dir that can then be persisted in a format relative to the implementation."""
+        pass
 
-        return path
-
+    @abstractmethod
     def _from_normalized_path(self, path: Optional[str]) -> Optional[str]:
-        """Accepts a filesystem path and returns an API path, i.e. one relative
+        """Accepts a "persistable" path and returns an API path, i.e. one relative
         to root_dir and uses forward slashes as the path separator. Returns
         `None` if the given path is None or is not relative to root_dir."""
-        if path is None:
-            return None
+        pass
 
-        if os.path.commonprefix([self.root_dir, path]) != self.root_dir:
-            return None
-
-        relpath = os.path.relpath(path, self.root_dir)
-        # always use forward slashes to delimit children
-        relpath = relpath.replace(os.path.sep, "/")
-
-        return relpath
-
-    def _move_recursive(self, old_path: str, new_path: str, sep: str = os.path.sep) -> None:
+    def _move_recursive(self, old_path: str, new_path: str, path_mgr: Any = os.path) -> None:
         """Move all children of a given directory at `old_path` to a new
         directory at `new_path`, delimited by `sep`."""
-        old_path_glob = old_path + sep + "*"
+        old_path_glob = old_path + path_mgr.sep + "*"
         records = self.con.execute(
             "SELECT id, path FROM Files WHERE path GLOB ?", (old_path_glob,)
         ).fetchall()
 
         for record in records:
             id, old_recpath = record
-            new_recpath = os.path.join(new_path, os.path.relpath(old_recpath, start=old_path))
+            new_recpath = path_mgr.join(new_path, path_mgr.relpath(old_recpath, start=old_path))
             self.con.execute("UPDATE Files SET path = ? WHERE id = ?", (new_recpath, id))
 
-    def _copy_recursive(self, from_path: str, to_path: str, sep: str = os.path.sep) -> None:
+    def _copy_recursive(self, from_path: str, to_path: str, path_mgr: Any = os.path) -> None:
         """Copy all children of a given directory at `from_path` to a new
         directory at `to_path`, delimited by `sep`."""
-        from_path_glob = from_path + sep + "*"
+        from_path_glob = from_path + path_mgr.sep + "*"
         records = self.con.execute(
             "SELECT path FROM Files WHERE path GLOB ?", (from_path_glob,)
         ).fetchall()
 
         for record in records:
             (from_recpath,) = record
-            to_recpath = os.path.join(to_path, os.path.relpath(from_recpath, start=from_path))
+            to_recpath = path_mgr.join(to_path, path_mgr.relpath(from_recpath, start=from_path))
             self.con.execute(
                 "INSERT INTO Files (id, path) VALUES (?, ?)", (self._uuid(), to_recpath)
             )
 
-    def _delete_recursive(self, path: str, sep: str = os.path.sep) -> None:
+    def _delete_recursive(self, path: str, path_mgr: Any = os.path) -> None:
         """Delete all children of a given directory, delimited by `sep`."""
-        path_glob = path + sep + "*"
+        path_glob = path + path_mgr.sep + "*"
         self.con.execute("DELETE FROM Files WHERE path GLOB ?", (path_glob,))
 
     @abstractmethod
@@ -232,6 +220,15 @@ class ArbitraryFileIdManager(BaseFileIdManager):
     Server 2.
     """
 
+    @validate("root_dir")
+    def _validate_root_dir(self, proposal):
+        # Convert root_dir to an api path, since that's essentially what we persist.
+        if proposal["value"] is None:
+            return ""
+
+        normalized_content_root = self._normalize_separators(proposal["value"])
+        return normalized_content_root
+
     def __init__(self, *args, **kwargs):
         # pass args and kwargs to parent Configurable
         super().__init__(*args, **kwargs)
@@ -253,6 +250,41 @@ class ArbitraryFileIdManager(BaseFileIdManager):
         )
         self.con.execute("CREATE INDEX IF NOT EXISTS ix_Files_path ON Files (path)")
         self.con.commit()
+
+    @staticmethod
+    def _normalize_separators(path):
+        """Replaces backslashes with forward slashes, removing adjacent slashes."""
+
+        parts = path.strip("\\").split("\\")
+        return "/".join(parts)
+
+    def _normalize_path(self, path):
+        """Accepts an API path and returns a "persistable" path, i.e. one prefixed
+        by root_dir that can then be persisted in a format relative to the implementation."""
+        # use commonprefix instead of commonpath, since root_dir may not be a
+        # absolute POSIX path.
+
+        # norm_root_dir = self._normalize_separators(self.root_dir)
+        path = self._normalize_separators(path)
+        if posixpath.commonprefix([self.root_dir, path]) != self.root_dir:
+            path = posixpath.join(self.root_dir, path)
+
+        return path
+
+    def _from_normalized_path(self, path: Optional[str]) -> Optional[str]:
+        """Accepts a "persistable" path and returns an API path, i.e. one relative
+        to root_dir and uses forward slashes as the path separator. Returns
+        `None` if the given path is None or is not relative to root_dir."""
+        if path is None:
+            return None
+
+        # Convert root_dir to an api path, since that's essentially what we persist.
+        # norm_root_dir = self._normalize_separators(self.root_dir)
+        if posixpath.commonprefix([self.root_dir, path]) != self.root_dir:
+            return None
+
+        relpath = posixpath.relpath(path, self.root_dir)
+        return relpath
 
     def _create(self, path: str) -> str:
         path = self._normalize_path(path)
@@ -291,7 +323,7 @@ class ArbitraryFileIdManager(BaseFileIdManager):
 
         if id:
             self.con.execute("UPDATE Files SET path = ? WHERE path = ?", (new_path, old_path))
-            self._move_recursive(old_path, new_path, "/")
+            self._move_recursive(old_path, new_path, posixpath)
         else:
             id = self._create(new_path)
 
@@ -303,7 +335,7 @@ class ArbitraryFileIdManager(BaseFileIdManager):
         to_path = self._normalize_path(to_path)
 
         id = self._create(to_path)
-        self._copy_recursive(from_path, to_path, "/")
+        self._copy_recursive(from_path, to_path, posixpath)
 
         self.con.commit()
         return id
@@ -312,7 +344,7 @@ class ArbitraryFileIdManager(BaseFileIdManager):
         path = self._normalize_path(path)
 
         self.con.execute("DELETE FROM Files WHERE path = ?", (path,))
-        self._delete_recursive(path, "/")
+        self._delete_recursive(path, posixpath)
 
         self.con.commit()
 
@@ -395,11 +427,31 @@ class LocalFileIdManager(BaseFileIdManager):
         self.con.commit()
 
     def _normalize_path(self, path):
-        path = super()._normalize_path(path)
+        """Accepts an API path and returns a filesystem path, i.e. one prefixed by root_dir."""
+        if os.path.commonprefix([self.root_dir, path]) != self.root_dir:
+            path = os.path.join(self.root_dir, path)
+
         path = os.path.normcase(path)
         path = os.path.normpath(path)
-
         return path
+
+    def _from_normalized_path(self, path: Optional[str]) -> Optional[str]:
+        """Accepts a "persisted" filesystem path and returns an API path, i.e.
+        one relative to root_dir and uses forward slashes as the path separator.
+        Returns `None` if the given path is None or is not relative to root_dir.
+        """
+        if path is None:
+            return None
+
+        norm_root_dir = os.path.normcase(self.root_dir)
+        if os.path.commonprefix([norm_root_dir, path]) != norm_root_dir:
+            return None
+
+        relpath = os.path.relpath(path, norm_root_dir)
+        # always use forward slashes to delimit children
+        relpath = relpath.replace(os.path.sep, "/")
+
+        return relpath
 
     def _index_all(self):
         """Recursively indexes all directories under the server root."""
@@ -495,19 +547,10 @@ class LocalFileIdManager(BaseFileIdManager):
 
         scan_iter.close()
 
-    def _check_timestamps(self, stat_info):
+    def _check_timestamps(self, stat_info, src_crtime, src_mtime):
         """Returns True if the timestamps of a file match those recorded in the
         Files table. Returns False otherwise."""
 
-        src = self.con.execute(
-            "SELECT crtime, mtime FROM Files WHERE ino = ?", (stat_info.ino,)
-        ).fetchone()
-
-        # if no record with matching ino, then return None
-        if not src:
-            return False
-
-        src_crtime, src_mtime = src
         src_timestamp = src_crtime if src_crtime is not None else src_mtime
         dst_timestamp = stat_info.crtime if stat_info.crtime is not None else stat_info.mtime
         return src_timestamp == dst_timestamp
@@ -545,16 +588,16 @@ class LocalFileIdManager(BaseFileIdManager):
             return None
 
         src = self.con.execute(
-            "SELECT id, path FROM Files WHERE ino = ?", (stat_info.ino,)
+            "SELECT id, path, crtime, mtime FROM Files WHERE ino = ?", (stat_info.ino,)
         ).fetchone()
 
         # if ino is not in database, return None
         if src is None:
             return None
-        id, old_path = src
+        id, old_path, crtime, mtime = src
 
         # if timestamps don't match, delete existing record and return None
-        if not self._check_timestamps(stat_info):
+        if not self._check_timestamps(stat_info, crtime, mtime):
             self.con.execute("DELETE FROM Files WHERE id = ?", (id,))
             return None
 
@@ -699,38 +742,33 @@ class LocalFileIdManager(BaseFileIdManager):
         prior to calling `get_path()`.
         """
         # optimistic approach: first check to see if path was not yet moved
-        row = self.con.execute("SELECT path, ino FROM Files WHERE id = ?", (id,)).fetchone()
+        for retry in [True, False]:
+            row = self.con.execute(
+                "SELECT path, ino, crtime, mtime FROM Files WHERE id = ?", (id,)
+            ).fetchone()
 
-        # if file ID does not exist, return None
-        if not row:
-            return None
+            # if file ID does not exist, return None
+            if not row:
+                return None
 
-        path, ino = row
-        stat_info = self._stat(path)
+            path, ino, crtime, mtime = row
+            stat_info = self._stat(path)
 
-        if stat_info and ino == stat_info.ino and self._check_timestamps(stat_info):
-            # if file already exists at path and the ino and timestamps match,
-            # then return the correct path immediately (best case)
-            return self._from_normalized_path(path)
+            if (
+                stat_info
+                and ino == stat_info.ino
+                and self._check_timestamps(stat_info, crtime, mtime)
+            ):
+                # if file already exists at path and the ino and timestamps match,
+                # then return the correct path immediately (best case)
+                return self._from_normalized_path(path)
 
-        # otherwise, try again after calling _sync_all() to sync the Files table to the file tree
-        self._sync_all()
-        row = self.con.execute("SELECT path, ino FROM Files WHERE id = ?", (id,)).fetchone()
-        # file ID already guaranteed to exist from previous check
-        path, ino = row
+            # otherwise, try again after calling _sync_all() to sync the Files table to the file tree
+            if retry:
+                self._sync_all()
 
-        # if file no longer exists at path, return None
-        stat_info = self._stat(path)
-        if stat_info is None:
-            return None
-
-        # if inode numbers or timestamps of the file and record don't match,
-        # return None
-        if ino != stat_info.ino or not self._check_timestamps(stat_info):
-            return None
-
-        # finally, convert the path to a relative one and return it
-        return self._from_normalized_path(path)
+        # If we're here, the retry didn't work.
+        return None
 
     @log(
         lambda self, old_path, new_path: f"Updating index following move from {old_path} to {new_path}.",
