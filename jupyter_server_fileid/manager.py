@@ -547,14 +547,6 @@ class LocalFileIdManager(BaseFileIdManager):
 
         scan_iter.close()
 
-    def _check_timestamps(self, stat_info, src_crtime, src_mtime):
-        """Returns True if the timestamps of a file match those recorded in the
-        Files table. Returns False otherwise."""
-
-        src_timestamp = src_crtime if src_crtime is not None else src_mtime
-        dst_timestamp = stat_info.crtime if stat_info.crtime is not None else stat_info.mtime
-        return src_timestamp == dst_timestamp
-
     def _sync_file(self, path, stat_info):
         """
         Syncs the file at `path` with the Files table by detecting whether the
@@ -588,16 +580,16 @@ class LocalFileIdManager(BaseFileIdManager):
             return None
 
         src = self.con.execute(
-            "SELECT id, path, crtime, mtime FROM Files WHERE ino = ?", (stat_info.ino,)
+            "SELECT id, path, crtime FROM Files WHERE ino = ?", (stat_info.ino,)
         ).fetchone()
 
         # if ino is not in database, return None
         if src is None:
             return None
-        id, old_path, crtime, mtime = src
+        id, old_path, crtime = src
 
         # if timestamps don't match, delete existing record and return None
-        if not self._check_timestamps(stat_info, crtime, mtime):
+        if crtime != stat_info.crtime:
             self.con.execute("DELETE FROM Files WHERE id = ?", (id,))
             return None
 
@@ -744,21 +736,17 @@ class LocalFileIdManager(BaseFileIdManager):
         # optimistic approach: first check to see if path was not yet moved
         for retry in [True, False]:
             row = self.con.execute(
-                "SELECT path, ino, crtime, mtime FROM Files WHERE id = ?", (id,)
+                "SELECT path, ino, crtime FROM Files WHERE id = ?", (id,)
             ).fetchone()
 
             # if file ID does not exist, return None
             if not row:
                 return None
 
-            path, ino, crtime, mtime = row
+            path, ino, crtime = row
             stat_info = self._stat(path)
 
-            if (
-                stat_info
-                and ino == stat_info.ino
-                and self._check_timestamps(stat_info, crtime, mtime)
-            ):
+            if stat_info and ino == stat_info.ino and crtime == stat_info.crtime:
                 # if file already exists at path and the ino and timestamps match,
                 # then return the correct path immediately (best case)
                 return self._from_normalized_path(path)
