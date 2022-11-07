@@ -209,6 +209,10 @@ def test_index_oob_move(fid_manager, old_path, new_path, fs_helpers):
     assert fid_manager.index(new_path) == id
 
 
+crtime_support = os.name == "nt" or hasattr(os.stat_result, "st_birthtime")
+
+
+@pytest.mark.skipif(not crtime_support, reason="Requires crtime support.")
 def test_index_after_deleting_dir_in_same_path(fid_manager, test_path, fs_helpers):
     old_id = fid_manager.index(test_path)
 
@@ -221,6 +225,7 @@ def test_index_after_deleting_dir_in_same_path(fid_manager, test_path, fs_helper
     assert fid_manager.get_path(new_id) == test_path
 
 
+@pytest.mark.skipif(not crtime_support, reason="Requires crtime support.")
 def test_index_after_deleting_regfile_in_same_path(fid_manager, test_path_child, fs_helpers):
     old_id = fid_manager.index(test_path_child)
 
