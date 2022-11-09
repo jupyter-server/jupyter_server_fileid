@@ -203,7 +203,7 @@ class BaseFileIdManager(ABC, LoggingConfigurable, metaclass=FileIdManagerMeta):
         # first, backup the database at backup_db_path.
         db_path_dir, db_path_basename = os.path.split(self.db_path)
         backup_db_path = os.path.join(
-            db_path_dir, datetime.datetime.now().strftime("%Y-%m-%dT%H:%M:%S-") + db_path_basename
+            db_path_dir, datetime.datetime.now().strftime("%Y-%m-%dT%H-%M-%S-") + db_path_basename
         )
         self.con.close()
         os.rename(self.db_path, backup_db_path)
