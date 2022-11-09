@@ -1,3 +1,5 @@
+import datetime
+import importlib
 import os
 import posixpath
 import sqlite3
@@ -5,7 +7,7 @@ import stat
 import time
 import uuid
 from abc import ABC, ABCMeta, abstractmethod
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Callable, Dict, Generator, Optional, Tuple
 
 from jupyter_core.paths import jupyter_data_dir
 from traitlets import TraitError, Unicode, validate
@@ -65,6 +67,8 @@ class BaseFileIdManager(ABC, LoggingConfigurable, metaclass=FileIdManagerMeta):
         config=True,
     )
 
+    con: Optional[sqlite3.Connection]
+
     @validate("db_path")
     def _validate_db_path(self, proposal):
         if proposal["value"] is None:
@@ -95,6 +99,9 @@ class BaseFileIdManager(ABC, LoggingConfigurable, metaclass=FileIdManagerMeta):
     def _move_recursive(self, old_path: str, new_path: str, path_mgr: Any = os.path) -> None:
         """Move all children of a given directory at `old_path` to a new
         directory at `new_path`, delimited by `sep`."""
+        if not hasattr(self, "con") or self.con is None:
+            return
+
         old_path_glob = old_path + path_mgr.sep + "*"
         records = self.con.execute(
             "SELECT id, path FROM Files WHERE path GLOB ?", (old_path_glob,)
@@ -108,6 +115,9 @@ class BaseFileIdManager(ABC, LoggingConfigurable, metaclass=FileIdManagerMeta):
     def _copy_recursive(self, from_path: str, to_path: str, path_mgr: Any = os.path) -> None:
         """Copy all children of a given directory at `from_path` to a new
         directory at `to_path`, delimited by `sep`."""
+        if not hasattr(self, "con") or self.con is None:
+            return
+
         from_path_glob = from_path + path_mgr.sep + "*"
         records = self.con.execute(
             "SELECT path FROM Files WHERE path GLOB ?", (from_path_glob,)
@@ -122,8 +132,113 @@ class BaseFileIdManager(ABC, LoggingConfigurable, metaclass=FileIdManagerMeta):
 
     def _delete_recursive(self, path: str, path_mgr: Any = os.path) -> None:
         """Delete all children of a given directory, delimited by `sep`."""
+        if not hasattr(self, "con") or self.con is None:
+            return
+
         path_glob = path + path_mgr.sep + "*"
         self.con.execute("DELETE FROM Files WHERE path GLOB ?", (path_glob,))
+
+    def _write_manifest(self) -> None:
+        """Writes a manifest to a database containing the current manager's
+        import path."""
+        if not hasattr(self, "con") or self.con is None:
+            return
+
+        manager_module = self.__class__.__module__
+        manager_classname = self.__class__.__qualname__
+        self.con.execute(
+            "CREATE TABLE Manifest("
+            "manager_module TEXT NOT NULL, "
+            "manager_classname TEXT NOT NULL"
+            ")"
+        )
+        self.con.execute(
+            "INSERT INTO Manifest (manager_module, manager_classname) VALUES (?, ?)",
+            (manager_module, manager_classname),
+        )
+
+    def _check_manifest(self) -> bool:
+        """
+        Returns whether the database file's manifest matches the expected
+        manifest for this class. If one does not exist, writes the manifest and
+        returns True.
+        """
+        if not hasattr(self, "con") or self.con is None:
+            return False
+
+        manifest = None
+        manager_module = self.__class__.__module__
+        manager_classname = self.__class__.__qualname__
+
+        try:
+            manifest = self.con.execute(
+                "SELECT manager_module, manager_classname FROM Manifest"
+            ).fetchone()
+        except Exception:
+            pass
+
+        if manifest is None:
+            self._write_manifest()
+            return True
+
+        manifest_module, manifest_classname = manifest
+        return manifest_module == manager_module and manifest_classname == manager_classname
+
+    def _migrate_database(self) -> None:
+        """Checks whether the database file's manifest matches the expected
+        manifest for this class. Writes the manifest if one does not exist.
+        If one already exists and is incompatible with the expected manifest,
+        then this method backs up the existing database file into a separate
+        file, and then migrates the database over via calling `export_row()` on
+        the old manager and passing the yielded rows to `self.import_row()`.
+        """
+        if not hasattr(self, "con") or self.con is None:
+            return
+
+        manifest = self.con.execute(
+            "SELECT manager_module, manager_classname FROM Manifest"
+        ).fetchone()
+        prev_module, prev_classname = manifest
+
+        # first, backup the database at backup_db_path.
+        db_path_dir, db_path_basename = os.path.split(self.db_path)
+        backup_db_path = os.path.join(
+            db_path_dir, datetime.datetime.now().strftime("%Y-%m-%dT%H:%M:%S-") + db_path_basename
+        )
+        self.con.close()
+        os.rename(self.db_path, backup_db_path)
+
+        # recreate files table and indices
+        self.con = sqlite3.connect(self.db_path)
+        self._write_manifest()
+        self._create_tables()
+
+        # finally, migrate the database from backup_db_path to the current database.
+        PrevManager = getattr(importlib.import_module(prev_module), prev_classname)
+        for row in PrevManager.export_rows(backup_db_path):
+            self.import_row(row)
+
+    @staticmethod
+    def export_rows(db_path: str) -> Generator[Tuple[str, str], None, None]:
+        """Exports the Files table by returning a generator that yields one row
+        at a time, encoded as a two-tuple [id, path].
+
+        Notes
+        -----
+        - The base implementation is only for the ArbitraryFileIdManager and
+        BaseFileIdManager classes. Custom file ID managers should provide their
+        own custom implementation if necessary.
+        """
+        con = sqlite3.connect(db_path)
+        cursor = con.execute("SELECT id, path FROM Files")
+        row = cursor.fetchone()
+        while row is not None:
+            yield row
+            row = cursor.fetchone()
+
+    @abstractmethod
+    def import_row(self, row: Tuple[str, str]) -> None:
+        """Imports a row yielded from `export_rows()` into the Files table."""
 
     @abstractmethod
     def index(self, path: str) -> Optional[str]:
@@ -220,6 +335,8 @@ class ArbitraryFileIdManager(BaseFileIdManager):
     Server 2.
     """
 
+    con: sqlite3.Connection
+
     @validate("root_dir")
     def _validate_root_dir(self, proposal):
         # Convert root_dir to an api path, since that's essentially what we persist.
@@ -229,19 +346,7 @@ class ArbitraryFileIdManager(BaseFileIdManager):
         normalized_content_root = self._normalize_separators(proposal["value"])
         return normalized_content_root
 
-    def __init__(self, *args, **kwargs):
-        # pass args and kwargs to parent Configurable
-        super().__init__(*args, **kwargs)
-        # initialize instance attrs
-        self._update_cursor = False
-        # initialize connection with db
-        self.log.info(f"ArbitraryFileIdManager : Configured root dir: {self.root_dir}")
-        self.log.info(f"ArbitraryFileIdManager : Configured database path: {self.db_path}")
-        self.con = sqlite3.connect(self.db_path)
-        self.log.info("ArbitraryFileIdManager : Successfully connected to database file.")
-        self.log.info("ArbitraryFileIdManager : Creating File ID tables and indices.")
-        # do not allow reads to block writes. required when using multiple processes
-        self.con.execute("PRAGMA journal_mode = WAL")
+    def _create_tables(self):
         self.con.execute(
             "CREATE TABLE IF NOT EXISTS Files("
             "id TEXT PRIMARY KEY NOT NULL, "
@@ -249,6 +354,35 @@ class ArbitraryFileIdManager(BaseFileIdManager):
             ")"
         )
         self.con.execute("CREATE INDEX IF NOT EXISTS ix_Files_path ON Files (path)")
+
+    def __init__(self, *args, **kwargs):
+        # pass args and kwargs to parent Configurable
+        super().__init__(*args, **kwargs)
+
+        # initialize instance attrs
+        self._update_cursor = False
+
+        # initialize connection with db
+        self.log.info(f"ArbitraryFileIdManager : Configured root dir: {self.root_dir}")
+        self.log.info(f"ArbitraryFileIdManager : Configured database path: {self.db_path}")
+
+        self.con = sqlite3.connect(self.db_path)
+        # do not allow reads to block writes. required when using multiple processes
+        self.con.execute("PRAGMA journal_mode = WAL")
+
+        self.log.info("ArbitraryFileIdManager : Successfully connected to database file.")
+
+        if self._check_manifest():
+            # ensure tables and indices are created
+            self.log.info("ArbitraryFileIdManager : Creating File ID tables and indices.")
+            self._create_tables()
+        else:
+            # migrate database from old manager to current
+            self.log.info(
+                "ArbitraryFileIdManager : Database from different File ID manager detected. Migrating tables and indices."
+            )
+            self._migrate_database()
+
         self.con.commit()
 
     @staticmethod
@@ -286,11 +420,16 @@ class ArbitraryFileIdManager(BaseFileIdManager):
         relpath = posixpath.relpath(path, self.root_dir)
         return relpath
 
-    def _create(self, path: str) -> str:
+    def _create(self, path: str, id: Optional[str] = None) -> str:
         path = self._normalize_path(path)
-        id = self._uuid()
+        if id is None:
+            id = self._uuid()
         self.con.execute("INSERT INTO Files (id, path) VALUES (?, ?)", (id, path))
         return id
+
+    def import_row(self, row: Tuple[str, str]) -> None:
+        id, path = row
+        self._create(path, id)
 
     def index(self, path: str) -> str:
         path = self._normalize_path(path)
@@ -384,6 +523,8 @@ class LocalFileIdManager(BaseFileIdManager):
     performed during a method's procedure body.
     """
 
+    con: sqlite3.Connection
+
     @validate("root_dir")
     def _validate_root_dir(self, proposal):
         if proposal["value"] is None:
@@ -394,20 +535,7 @@ class LocalFileIdManager(BaseFileIdManager):
             )
         return proposal["value"]
 
-    def __init__(self, *args, **kwargs):
-        # pass args and kwargs to parent Configurable
-        super().__init__(*args, **kwargs)
-        # initialize instance attrs
-        self._update_cursor = False
-        self._last_sync = 0.0
-        # initialize connection with db
-        self.log.info(f"LocalFileIdManager : Configured root dir: {self.root_dir}")
-        self.log.info(f"LocalFileIdManager : Configured database path: {self.db_path}")
-        self.con = sqlite3.connect(self.db_path)
-        self.log.info("LocalFileIdManager : Successfully connected to database file.")
-        self.log.info("LocalFileIdManager : Creating File ID tables and indices.")
-        # do not allow reads to block writes. required when using multiple processes
-        self.con.execute("PRAGMA journal_mode = WAL")
+    def _create_tables(self):
         self.con.execute(
             "CREATE TABLE IF NOT EXISTS Files("
             "id TEXT PRIMARY KEY NOT NULL, "
@@ -420,10 +548,42 @@ class LocalFileIdManager(BaseFileIdManager):
             "is_dir TINYINT NOT NULL"
             ")"
         )
-        self._index_all()
         # no need to index ino as it is autoindexed by sqlite via UNIQUE constraint
         self.con.execute("CREATE INDEX IF NOT EXISTS ix_Files_path ON Files (path)")
         self.con.execute("CREATE INDEX IF NOT EXISTS ix_Files_is_dir ON Files (is_dir)")
+
+    def __init__(self, *args, **kwargs):
+        # pass args and kwargs to parent Configurable
+        super().__init__(*args, **kwargs)
+
+        # initialize instance attrs
+        self._update_cursor = False
+        self._last_sync = 0.0
+
+        self.log.info(f"LocalFileIdManager : Configured root dir: {self.root_dir}")
+        self.log.info(f"LocalFileIdManager : Configured database path: {self.db_path}")
+
+        # initialize connection with db
+        self.con = sqlite3.connect(self.db_path)
+        # do not allow reads to block writes. required when using multiple processes
+        self.con.execute("PRAGMA journal_mode = WAL")
+
+        self.log.info("LocalFileIdManager : Successfully connected to database file.")
+
+        if self._check_manifest():
+            # ensure tables and indices are created
+            self.log.info("LocalFileIdManager : Creating File ID tables and indices.")
+            self._create_tables()
+        else:
+            # migrate database from old manager to current
+            self.log.info(
+                "LocalFileIdManager : Database from different File ID manager detected. Migrating tables and indices."
+            )
+            self._migrate_database()
+
+        # index all directories under content root
+        self._index_all()
+
         self.con.commit()
 
     def _normalize_path(self, path):
@@ -632,7 +792,7 @@ class LocalFileIdManager(BaseFileIdManager):
 
         return self._parse_raw_stat(raw_stat)
 
-    def _create(self, path, stat_info):
+    def _create(self, path, stat_info, id=None):
         """Creates a record given its path and stat info. Returns the new file
         ID.
 
@@ -642,7 +802,8 @@ class LocalFileIdManager(BaseFileIdManager):
         dangerous and may throw a runtime error if the file is not guaranteed to
         have a unique `ino`.
         """
-        id = self._uuid()
+        if not id:
+            id = self._uuid()
         self.con.execute(
             "INSERT INTO Files (id, path, ino, crtime, mtime, is_dir) VALUES (?, ?, ?, ?, ?, ?)",
             (id, path, stat_info.ino, stat_info.crtime, stat_info.mtime, stat_info.is_dir),
@@ -684,6 +845,14 @@ class LocalFileIdManager(BaseFileIdManager):
                 (path, id),
             )
             return
+
+    def import_row(self, row: Tuple[str, str]) -> None:
+        id, path = row
+        stat_info = self._stat(path)
+        if stat_info is None:
+            return
+
+        self._create(path, stat_info, id)
 
     def index(self, path, stat_info=None, commit=True):
         """Returns the file ID for the file at `path`, creating a new file ID if

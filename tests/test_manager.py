@@ -91,6 +91,32 @@ def _normalize_path_arbitrary(fid_manager, path):
     return path
 
 
+def test_migrate_arbitrary_to_local(fid_db_path, jp_root_dir, test_path, test_path_child):
+    arbitrary = ArbitraryFileIdManager(db_path=fid_db_path, root_dir=str(jp_root_dir))
+    arbitrary.con.execute("PRAGMA journal_mode = off")
+
+    id_1 = arbitrary.index(test_path)
+    id_2 = arbitrary.index(test_path_child)
+    del arbitrary
+    local = LocalFileIdManager(db_path=fid_db_path, root_dir=str(jp_root_dir))
+
+    assert local.get_path(id_1) == test_path
+    assert local.get_path(id_2) == test_path_child
+
+
+def test_migrate_local_to_arbitrary(fid_db_path, jp_root_dir, test_path, test_path_child):
+    local = LocalFileIdManager(db_path=fid_db_path, root_dir=str(jp_root_dir))
+    local.con.execute("PRAGMA journal_mode = off")
+
+    id_1 = local.index(test_path)
+    id_2 = local.index(test_path_child)
+    del local
+    arbitrary = ArbitraryFileIdManager(db_path=fid_db_path, root_dir=str(jp_root_dir))
+
+    assert arbitrary.get_path(id_1) == test_path
+    assert arbitrary.get_path(id_2) == test_path_child
+
+
 def get_id_nosync(fid_manager, path):
     # We need to first put the path into a form the fileId manager implementation will for persistence.
     if isinstance(fid_manager, LocalFileIdManager):
