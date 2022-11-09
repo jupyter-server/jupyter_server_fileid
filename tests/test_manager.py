@@ -111,7 +111,10 @@ def test_migrate_local_to_arbitrary(fid_db_path, jp_root_dir, test_path, test_pa
     id_1 = local.index(test_path)
     id_2 = local.index(test_path_child)
     del local
-    arbitrary = ArbitraryFileIdManager(db_path=fid_db_path, root_dir=str(jp_root_dir))
+    # need to normalize the arbitrary content root to produce correct API paths
+    arbitrary = ArbitraryFileIdManager(
+        db_path=fid_db_path, root_dir=str(os.path.normcase(jp_root_dir))
+    )
 
     assert arbitrary.get_path(id_1) == test_path
     assert arbitrary.get_path(id_2) == test_path_child
