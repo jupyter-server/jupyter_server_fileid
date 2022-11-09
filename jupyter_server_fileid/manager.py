@@ -398,7 +398,6 @@ class ArbitraryFileIdManager(BaseFileIdManager):
         # use commonprefix instead of commonpath, since root_dir may not be a
         # absolute POSIX path.
 
-        # norm_root_dir = self._normalize_separators(self.root_dir)
         path = self._normalize_separators(path)
         if posixpath.commonprefix([self.root_dir, path]) != self.root_dir:
             path = posixpath.join(self.root_dir, path)
@@ -412,8 +411,6 @@ class ArbitraryFileIdManager(BaseFileIdManager):
         if path is None:
             return None
 
-        # Convert root_dir to an api path, since that's essentially what we persist.
-        # norm_root_dir = self._normalize_separators(self.root_dir)
         if posixpath.commonprefix([self.root_dir, path]) != self.root_dir:
             return None
 
@@ -429,6 +426,7 @@ class ArbitraryFileIdManager(BaseFileIdManager):
 
     def import_row(self, row: Tuple[str, str]) -> None:
         id, path = row
+        path = self._normalize_path(path)
         self._create(path, id)
 
     def index(self, path: str) -> str:
@@ -848,6 +846,7 @@ class LocalFileIdManager(BaseFileIdManager):
 
     def import_row(self, row: Tuple[str, str]) -> None:
         id, path = row
+        path = self._normalize_path(path)
         stat_info = self._stat(path)
         if stat_info is None:
             return
