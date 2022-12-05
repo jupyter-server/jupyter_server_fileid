@@ -225,10 +225,12 @@ class BaseFileIdManager(ABC, LoggingConfigurable, metaclass=FileIdManagerMeta):
         of rows, each encoded as a dictionary. This dictionary must at least
         contain `id` and `path`.
         """
+        pass
 
     @abstractmethod
     def import_rows(self, row: List[Dict[str, Any]]) -> None:
         """Imports a row yielded from `export_rows()` into the Files table."""
+        pass
 
     @abstractmethod
     def index(self, path: str) -> Optional[str]:
