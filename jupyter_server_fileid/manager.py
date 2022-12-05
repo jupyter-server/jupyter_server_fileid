@@ -339,12 +339,19 @@ class ArbitraryFileIdManager(BaseFileIdManager):
 
     @validate("root_dir")
     def _validate_root_dir(self, proposal):
-        # Convert root_dir to an api path, since that's essentially what we persist.
+        """Converts root_dir to a valid API path delimited by forward
+        slashes."""
         if proposal["value"] is None:
             return ""
+        root_dir = proposal["value"]
 
-        normalized_content_root = self._normalize_separators(proposal["value"])
-        return normalized_content_root
+        # if path is local filesystem path, normalize the case first
+        if os.path.isabs(root_dir):
+            root_dir = os.path.normcase(root_dir)
+
+        # finally, normalize separators (convert all \ => /)
+        root_dir = self._normalize_separators(root_dir)
+        return root_dir
 
     def _create_tables(self):
         self.con.execute(
