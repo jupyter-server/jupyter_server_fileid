@@ -7,7 +7,7 @@ import stat
 import time
 import uuid
 from abc import ABC, ABCMeta, abstractmethod
-from typing import Any, Callable, Dict, Generator, Optional, Tuple
+from typing import Any, Callable, Dict, Generator, List, Optional
 
 from jupyter_core.paths import jupyter_data_dir
 from traitlets import TraitError, Unicode, validate
@@ -190,7 +190,7 @@ class BaseFileIdManager(ABC, LoggingConfigurable, metaclass=FileIdManagerMeta):
         If one already exists and is incompatible with the expected manifest,
         then this method backs up the existing database file into a separate
         file, and then migrates the database over via calling `export_row()` on
-        the old manager and passing the yielded rows to `self.import_row()`.
+        the old manager and passing the yielded rows to `self.import_rows()`.
         """
         if not hasattr(self, "con") or self.con is None:
             return
@@ -216,28 +216,18 @@ class BaseFileIdManager(ABC, LoggingConfigurable, metaclass=FileIdManagerMeta):
         # finally, migrate the database from backup_db_path to the current database.
         PrevManager = getattr(importlib.import_module(prev_module), prev_classname)
         for row in PrevManager.export_rows(backup_db_path):
-            self.import_row(row)
+            self.import_rows(row)
 
     @staticmethod
-    def export_rows(db_path: str) -> Generator[Tuple[str, str], None, None]:
-        """Exports the Files table by returning a generator that yields one row
-        at a time, encoded as a two-tuple [id, path].
-
-        Notes
-        -----
-        - The base implementation is only for the ArbitraryFileIdManager and
-        BaseFileIdManager classes. Custom file ID managers should provide their
-        own custom implementation if necessary.
+    @abstractmethod
+    def export_rows(db_path: str) -> Generator[List[Dict[str, Any]], None, None]:
+        """Exports the Files table by returning a generator that yields a list
+        of rows, each encoded as a dictionary. This dictionary must at least
+        contain `id` and `path`.
         """
-        con = sqlite3.connect(db_path)
-        cursor = con.execute("SELECT id, path FROM Files")
-        row = cursor.fetchone()
-        while row is not None:
-            yield row
-            row = cursor.fetchone()
 
     @abstractmethod
-    def import_row(self, row: Tuple[str, str]) -> None:
+    def import_rows(self, row: List[Dict[str, Any]]) -> None:
         """Imports a row yielded from `export_rows()` into the Files table."""
 
     @abstractmethod
@@ -431,10 +421,21 @@ class ArbitraryFileIdManager(BaseFileIdManager):
         self.con.execute("INSERT INTO Files (id, path) VALUES (?, ?)", (id, path))
         return id
 
-    def import_row(self, row: Tuple[str, str]) -> None:
-        id, path = row
-        path = self._normalize_path(path)
-        self._create(path, id)
+    @staticmethod
+    def export_rows(db_path: str) -> Generator[List[Dict[str, Any]], None, None]:
+        con = sqlite3.connect(db_path)
+        cursor = con.execute("SELECT id, path FROM Files")
+        row = cursor.fetchone()
+        while row is not None:
+            row_dict = {"id": row[0], "path": row[1]}
+            yield [row_dict]
+            row = cursor.fetchone()
+
+    def import_rows(self, rows: List[Dict[str, Any]]) -> None:
+        for row in rows:
+            id = row["id"]
+            path = self._normalize_path(row["path"])
+            self._create(path, id)
 
     def index(self, path: str) -> str:
         path = self._normalize_path(path)
@@ -851,14 +852,32 @@ class LocalFileIdManager(BaseFileIdManager):
             )
             return
 
-    def import_row(self, row: Tuple[str, str]) -> None:
-        id, path = row
-        path = self._normalize_path(path)
-        stat_info = self._stat(path)
-        if stat_info is None:
-            return
+    @staticmethod
+    def export_rows(db_path: str) -> Generator[List[Dict[str, Any]], None, None]:
+        con = sqlite3.connect(db_path)
+        cursor = con.execute("SELECT id, path, ino, crtime, mtime, is_dir FROM Files")
+        row = cursor.fetchone()
+        while row is not None:
+            row_dict = {
+                "id": row[0],
+                "path": row[1],
+                "ino": row[2],
+                "crtime": row[3],
+                "mtime": row[4],
+                "is_dir": row[5],
+            }
+            yield [row_dict]
+            row = cursor.fetchone()
 
-        self._create(path, stat_info, id)
+    def import_rows(self, rows: List[Dict[str, Any]]) -> None:
+        for row in rows:
+            id = row["id"]
+            path = self._normalize_path(row["path"])
+            stat_info = self._stat(path)
+            if stat_info is None:
+                return
+
+            self._create(path, stat_info, id)
 
     def index(self, path, stat_info=None, commit=True):
         """Returns the file ID for the file at `path`, creating a new file ID if
