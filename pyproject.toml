@@ -39,7 +39,7 @@ jupyter-fileid = "jupyter_server_fileid.cli:main"
 file="LICENSE"
 
 [project.urls]
-Home = "https://github.com/github_username/jupyter_server_fileid"
+Home = "https://github.com/jupyter-server/jupyter_server_fileid"
 
 [tool.hatch.build.targets.wheel.shared-data]
 "jupyter-config" = "etc/jupyter"
