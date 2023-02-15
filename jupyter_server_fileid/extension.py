@@ -6,7 +6,6 @@ from jupyter_server_fileid.manager import ArbitraryFileIdManager, BaseFileIdMana
 
 
 class FileIdExtension(ExtensionApp):
-
     name = "jupyter_server_fileid"
 
     file_id_manager_class = Type(
