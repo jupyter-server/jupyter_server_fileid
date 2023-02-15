@@ -19,7 +19,10 @@ classifiers = [
     "Programming Language :: Python :: 3.10",
     "Framework :: Jupyter",
 ]
-dependencies = ["jupyter_server>=1.15, <3", "jupyter_events~=0.5.0"]
+dependencies = [
+    "jupyter_server>=1.15, <3",
+    "jupyter_events"
+]
 
 [project.optional-dependencies]
 test = [
