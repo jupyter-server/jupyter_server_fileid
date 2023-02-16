@@ -2,6 +2,35 @@
 
 <!-- <START NEW CHANGELOG ENTRY> -->
 
+## 0.7.0
+
+([Full Changelog](https://github.com/jupyter-server/jupyter_server_fileid/compare/v0.6.0...f42d481b072f8c1a961ad8dc6c2b3ab35a6d0777))
+
+### Enhancements made
+
+- remove mtime fallback [#47](https://github.com/jupyter-server/jupyter_server_fileid/pull/47) ([@dlqqq](https://github.com/dlqqq))
+- Make ArbitraryFileIdManager filesystem-agnostic and fix Windows CI [#46](https://github.com/jupyter-server/jupyter_server_fileid/pull/46) ([@kevin-bates](https://github.com/kevin-bates))
+
+### Bugs fixed
+
+- Relax jupyter_events dependency requirement [#57](https://github.com/jupyter-server/jupyter_server_fileid/pull/57) ([@akchinSTC](https://github.com/akchinSTC))
+- Fix project URL [#55](https://github.com/jupyter-server/jupyter_server_fileid/pull/55) ([@frenzymadness](https://github.com/frenzymadness))
+- Make ArbitraryFileIdManager filesystem-agnostic and fix Windows CI [#46](https://github.com/jupyter-server/jupyter_server_fileid/pull/46) ([@kevin-bates](https://github.com/kevin-bates))
+
+### Maintenance and upkeep improvements
+
+### Other merged PRs
+
+- Update check-jsonschema usage to latest style [#50](https://github.com/jupyter-server/jupyter_server_fileid/pull/50) ([@sirosen](https://github.com/sirosen))
+
+### Contributors to this release
+
+([GitHub contributors page for this release](https://github.com/jupyter-server/jupyter_server_fileid/graphs/contributors?from=2022-10-28&to=2023-02-16&type=c))
+
+[@akchinSTC](https://github.com/search?q=repo%3Ajupyter-server%2Fjupyter_server_fileid+involves%3AakchinSTC+updated%3A2022-10-28..2023-02-16&type=Issues) | [@codecov](https://github.com/search?q=repo%3Ajupyter-server%2Fjupyter_server_fileid+involves%3Acodecov+updated%3A2022-10-28..2023-02-16&type=Issues) | [@codecov-commenter](https://github.com/search?q=repo%3Ajupyter-server%2Fjupyter_server_fileid+involves%3Acodecov-commenter+updated%3A2022-10-28..2023-02-16&type=Issues) | [@dlqqq](https://github.com/search?q=repo%3Ajupyter-server%2Fjupyter_server_fileid+involves%3Adlqqq+updated%3A2022-10-28..2023-02-16&type=Issues) | [@frenzymadness](https://github.com/search?q=repo%3Ajupyter-server%2Fjupyter_server_fileid+involves%3Afrenzymadness+updated%3A2022-10-28..2023-02-16&type=Issues) | [@kevin-bates](https://github.com/search?q=repo%3Ajupyter-server%2Fjupyter_server_fileid+involves%3Akevin-bates+updated%3A2022-10-28..2023-02-16&type=Issues) | [@pre-commit-ci](https://github.com/search?q=repo%3Ajupyter-server%2Fjupyter_server_fileid+involves%3Apre-commit-ci+updated%3A2022-10-28..2023-02-16&type=Issues) | [@sirosen](https://github.com/search?q=repo%3Ajupyter-server%2Fjupyter_server_fileid+involves%3Asirosen+updated%3A2022-10-28..2023-02-16&type=Issues) | [@welcome](https://github.com/search?q=repo%3Ajupyter-server%2Fjupyter_server_fileid+involves%3Awelcome+updated%3A2022-10-28..2023-02-16&type=Issues)
+
+<!-- <END NEW CHANGELOG ENTRY> -->
+
 ## 0.6.0
 
 ([Full Changelog](https://github.com/jupyter-server/jupyter_server_fileid/compare/v0.5.0...328d893ff2323f20925e036e57eb62f302fa94e2))
@@ -21,8 +50,6 @@
 ([GitHub contributors page for this release](https://github.com/jupyter-server/jupyter_server_fileid/graphs/contributors?from=2022-10-25&to=2022-10-28&type=c))
 
 [@codecov-commenter](https://github.com/search?q=repo%3Ajupyter-server%2Fjupyter_server_fileid+involves%3Acodecov-commenter+updated%3A2022-10-25..2022-10-28&type=Issues) | [@dlqqq](https://github.com/search?q=repo%3Ajupyter-server%2Fjupyter_server_fileid+involves%3Adlqqq+updated%3A2022-10-25..2022-10-28&type=Issues) | [@kevin-bates](https://github.com/search?q=repo%3Ajupyter-server%2Fjupyter_server_fileid+involves%3Akevin-bates+updated%3A2022-10-25..2022-10-28&type=Issues) | [@welcome](https://github.com/search?q=repo%3Ajupyter-server%2Fjupyter_server_fileid+involves%3Awelcome+updated%3A2022-10-25..2022-10-28&type=Issues)
-
-<!-- <END NEW CHANGELOG ENTRY> -->
 
 ## 0.5.0
 
