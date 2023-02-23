@@ -565,3 +565,29 @@ def test_save(any_fid_manager, test_path, fs_helpers):
     any_fid_manager.save(test_path)
 
     assert any_fid_manager.get_id(test_path) == id
+
+
+@pytest.mark.parametrize(
+    "db_journal_mode", ["invalid", None, "DELETE", "TRUNCATE", "PERSIST", "MEMORY", "WAL", "OFF"]
+)
+def test_db_journal_mode(any_fid_manager_class, fid_db_path, jp_root_dir, db_journal_mode):
+    if db_journal_mode == "invalid":  # test invalid
+        with pytest.raises(TraitError, match=" must be one of "):
+            any_fid_manager_class(
+                db_path=fid_db_path, root_dir=str(jp_root_dir), db_journal_mode=db_journal_mode
+            )
+    else:
+        if not db_journal_mode:  # test correct defaults
+            expected_journal_mode = (
+                "WAL" if any_fid_manager_class.__name__ == "LocalFileIdManager" else "DELETE"
+            )
+            fid_manager = any_fid_manager_class(db_path=fid_db_path, root_dir=str(jp_root_dir))
+        else:  # test any valid value
+            expected_journal_mode = db_journal_mode
+            fid_manager = any_fid_manager_class(
+                db_path=fid_db_path, root_dir=str(jp_root_dir), db_journal_mode=db_journal_mode
+            )
+
+        cursor = fid_manager.con.execute("PRAGMA journal_mode")
+        actual_journal_mode = cursor.fetchone()
+        assert actual_journal_mode[0].upper() == expected_journal_mode
