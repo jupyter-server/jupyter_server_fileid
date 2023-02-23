@@ -2,6 +2,22 @@
 
 <!-- <START NEW CHANGELOG ENTRY> -->
 
+## 0.8.0
+
+([Full Changelog](https://github.com/jupyter-server/jupyter_server_fileid/compare/v0.7.0...542ccebfcf7713a81a4f2fbd07e8227573c3a282))
+
+### Enhancements made
+
+- Add db_journal_mode trait to FileIdManager classes [#61](https://github.com/jupyter-server/jupyter_server_fileid/pull/61) ([@kevin-bates](https://github.com/kevin-bates))
+
+### Contributors to this release
+
+([GitHub contributors page for this release](https://github.com/jupyter-server/jupyter_server_fileid/graphs/contributors?from=2023-02-16&to=2023-02-23&type=c))
+
+[@codecov](https://github.com/search?q=repo%3Ajupyter-server%2Fjupyter_server_fileid+involves%3Acodecov+updated%3A2023-02-16..2023-02-23&type=Issues) | [@kevin-bates](https://github.com/search?q=repo%3Ajupyter-server%2Fjupyter_server_fileid+involves%3Akevin-bates+updated%3A2023-02-16..2023-02-23&type=Issues)
+
+<!-- <END NEW CHANGELOG ENTRY> -->
+
 ## 0.7.0
 
 ([Full Changelog](https://github.com/jupyter-server/jupyter_server_fileid/compare/v0.6.0...f42d481b072f8c1a961ad8dc6c2b3ab35a6d0777))
@@ -28,8 +44,6 @@
 ([GitHub contributors page for this release](https://github.com/jupyter-server/jupyter_server_fileid/graphs/contributors?from=2022-10-28&to=2023-02-16&type=c))
 
 [@akchinSTC](https://github.com/search?q=repo%3Ajupyter-server%2Fjupyter_server_fileid+involves%3AakchinSTC+updated%3A2022-10-28..2023-02-16&type=Issues) | [@codecov](https://github.com/search?q=repo%3Ajupyter-server%2Fjupyter_server_fileid+involves%3Acodecov+updated%3A2022-10-28..2023-02-16&type=Issues) | [@codecov-commenter](https://github.com/search?q=repo%3Ajupyter-server%2Fjupyter_server_fileid+involves%3Acodecov-commenter+updated%3A2022-10-28..2023-02-16&type=Issues) | [@dlqqq](https://github.com/search?q=repo%3Ajupyter-server%2Fjupyter_server_fileid+involves%3Adlqqq+updated%3A2022-10-28..2023-02-16&type=Issues) | [@frenzymadness](https://github.com/search?q=repo%3Ajupyter-server%2Fjupyter_server_fileid+involves%3Afrenzymadness+updated%3A2022-10-28..2023-02-16&type=Issues) | [@kevin-bates](https://github.com/search?q=repo%3Ajupyter-server%2Fjupyter_server_fileid+involves%3Akevin-bates+updated%3A2022-10-28..2023-02-16&type=Issues) | [@pre-commit-ci](https://github.com/search?q=repo%3Ajupyter-server%2Fjupyter_server_fileid+involves%3Apre-commit-ci+updated%3A2022-10-28..2023-02-16&type=Issues) | [@sirosen](https://github.com/search?q=repo%3Ajupyter-server%2Fjupyter_server_fileid+involves%3Asirosen+updated%3A2022-10-28..2023-02-16&type=Issues) | [@welcome](https://github.com/search?q=repo%3Ajupyter-server%2Fjupyter_server_fileid+involves%3Awelcome+updated%3A2022-10-28..2023-02-16&type=Issues)
-
-<!-- <END NEW CHANGELOG ENTRY> -->
 
 ## 0.6.0
 
