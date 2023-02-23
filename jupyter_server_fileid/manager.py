@@ -8,7 +8,7 @@ from abc import ABC, ABCMeta, abstractmethod
 from typing import Any, Callable, Dict, Optional
 
 from jupyter_core.paths import jupyter_data_dir
-from traitlets import TraitError, Unicode, validate
+from traitlets import TraitError, Unicode, default, validate
 from traitlets.config.configurable import LoggingConfigurable
 
 
@@ -74,6 +74,23 @@ class BaseFileIdManager(ABC, LoggingConfigurable, metaclass=FileIdManagerMeta):
                 f"BaseFileIdManager : {proposal['trait'].name} must be an absolute path"
             )
         return proposal["value"]
+
+    JOURNAL_MODES = ["DELETE", "TRUNCATE", "PERSIST", "MEMORY", "WAL", "OFF"]
+    db_journal_mode = Unicode(
+        help=(
+            f"The journal mode setting for the SQLite database.  Must be one of {JOURNAL_MODES}."
+        ),
+        config=True,
+    )
+
+    @validate("db_journal_mode")
+    def _validate_db_journal_mode(self, proposal):
+        candidate_value = proposal["value"]
+        if candidate_value is None or candidate_value.upper() not in self.JOURNAL_MODES:
+            raise TraitError(
+                f"db_journal_mode ('{candidate_value}') must be one of {self.JOURNAL_MODES}."
+            )
+        return candidate_value.upper()
 
     @staticmethod
     def _uuid() -> str:
@@ -229,6 +246,10 @@ class ArbitraryFileIdManager(BaseFileIdManager):
         normalized_content_root = self._normalize_separators(proposal["value"])
         return normalized_content_root
 
+    @default("db_journal_mode")
+    def _default_db_journal_mode(self):
+        return "DELETE"
+
     def __init__(self, *args, **kwargs):
         # pass args and kwargs to parent Configurable
         super().__init__(*args, **kwargs)
@@ -239,9 +260,11 @@ class ArbitraryFileIdManager(BaseFileIdManager):
         self.log.info(f"ArbitraryFileIdManager : Configured database path: {self.db_path}")
         self.con = sqlite3.connect(self.db_path)
         self.log.info("ArbitraryFileIdManager : Successfully connected to database file.")
-        self.log.info("ArbitraryFileIdManager : Creating File ID tables and indices.")
-        # do not allow reads to block writes. required when using multiple processes
-        self.con.execute("PRAGMA journal_mode = WAL")
+        self.log.info(
+            f"ArbitraryFileIdManager : Creating File ID tables and indices with "
+            f"journal_mode = {self.db_journal_mode}"
+        )
+        self.con.execute(f"PRAGMA journal_mode = {self.db_journal_mode}")
         self.con.execute(
             "CREATE TABLE IF NOT EXISTS Files("
             "id TEXT PRIMARY KEY NOT NULL, "
@@ -394,6 +417,10 @@ class LocalFileIdManager(BaseFileIdManager):
             )
         return proposal["value"]
 
+    @default("db_journal_mode")
+    def _default_db_journal_mode(self):
+        return "WAL"
+
     def __init__(self, *args, **kwargs):
         # pass args and kwargs to parent Configurable
         super().__init__(*args, **kwargs)
@@ -405,9 +432,11 @@ class LocalFileIdManager(BaseFileIdManager):
         self.log.info(f"LocalFileIdManager : Configured database path: {self.db_path}")
         self.con = sqlite3.connect(self.db_path)
         self.log.info("LocalFileIdManager : Successfully connected to database file.")
-        self.log.info("LocalFileIdManager : Creating File ID tables and indices.")
-        # do not allow reads to block writes. required when using multiple processes
-        self.con.execute("PRAGMA journal_mode = WAL")
+        self.log.info(
+            f"LocalFileIdManager : Creating File ID tables and indices with "
+            f"journal_mode = {self.db_journal_mode}"
+        )
+        self.con.execute(f"PRAGMA journal_mode = {self.db_journal_mode}")
         self.con.execute(
             "CREATE TABLE IF NOT EXISTS Files("
             "id TEXT PRIMARY KEY NOT NULL, "
