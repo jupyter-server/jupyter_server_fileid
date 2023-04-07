@@ -470,6 +470,40 @@ def test_move_indexed(any_fid_manager, old_path, new_path, fs_helpers):
     assert any_fid_manager.get_path(old_id) == new_path
 
 
+def test_oob_ib_move(fid_manager, test_path, fs_helpers):
+    """
+    Test an out-of-band move followed by an in-band move.
+    """
+    new_path_1 = "path1"
+    new_path_2 = "path2"
+    id = fid_manager.index(test_path)
+
+    # out-of-band
+    fs_helpers.move(test_path, new_path_1)
+    # in-band
+    fs_helpers.move(new_path_1, new_path_2)
+    fid_manager.move(new_path_1, new_path_2)
+
+    assert id == fid_manager.get_id(new_path_2)
+
+
+def test_ib_oob_move(fid_manager, test_path, fs_helpers):
+    """
+    Test an in-band move followed by an out-of-band move.
+    """
+    new_path_1 = "path1"
+    new_path_2 = "path2"
+    id = fid_manager.index(test_path)
+
+    # in-band
+    fs_helpers.move(test_path, new_path_1)
+    fid_manager.move(test_path, new_path_1)
+    # out-of-band
+    fs_helpers.move(new_path_1, new_path_2)
+
+    assert id == fid_manager.get_id(new_path_2)
+
+
 # test for disjoint move handling
 # disjoint move: any out-of-band move that does not preserve stat info
 def test_disjoint_move_indexed(any_fid_manager, old_path, new_path, fs_helpers):
