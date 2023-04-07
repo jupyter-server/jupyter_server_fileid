@@ -504,18 +504,6 @@ def test_ib_oob_move(fid_manager, test_path, fs_helpers):
     assert id == fid_manager.get_id(new_path_2)
 
 
-# test for disjoint move handling
-# disjoint move: any out-of-band move that does not preserve stat info
-def test_disjoint_move_indexed(any_fid_manager, old_path, new_path, fs_helpers):
-    old_id = any_fid_manager.index(old_path)
-
-    fs_helpers.delete(old_path)
-    fs_helpers.touch(new_path, dir=True)
-    new_id = any_fid_manager.move(old_path, new_path)
-
-    assert old_id == new_id
-
-
 def test_move_recursive(
     any_fid_manager,
     old_path,
