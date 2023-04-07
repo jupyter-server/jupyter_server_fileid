@@ -802,23 +802,19 @@ class LocalFileIdManager(BaseFileIdManager):
         if stat_info is None:
             return None
 
-        if stat_info.is_dir:
-            self._move_recursive(old_path, new_path)
+        # sync the file and see if it was already indexed
+        #
+        # originally this method did not call _sync_file() for performance
+        # reasons, but this is needed to handle an edge case:
+        # https://github.com/jupyter-server/jupyter_server_fileid/issues/62
+        id = self._sync_file(new_path, stat_info)
+        if id is not None:
+            return id
 
-        # attempt to fetch ID associated with old path
-        # we avoid using get_id() here since that will always return None as file no longer exists at old path
-        row = self.con.execute("SELECT id FROM Files WHERE path = ?", (old_path,)).fetchone()
-        if row is None:
-            # if no existing record, create a new one
-            id = self._create(new_path, stat_info)
-            self.con.commit()
-            return id
-        else:
-            # update existing record with new path and stat info
-            id = row[0]
-            self._update(id, stat_info, new_path)
-            self.con.commit()
-            return id
+        # if no existing record, create a new one
+        id = self._create(new_path, stat_info)
+        self.con.commit()
+        return id
 
     def _copy_recursive(self, from_path: str, to_path: str, _: str = "") -> None:
         """Copy all children of a given directory at `from_path` to a new
