@@ -2,6 +2,23 @@
 
 <!-- <START NEW CHANGELOG ENTRY> -->
 
+## 0.9.0
+
+([Full Changelog](https://github.com/jupyter-server/jupyter_server_fileid/compare/v0.8.0...505806162b4df60b4cbb461cfec1266b81df32ce))
+
+### Enhancements made
+
+- add Jupyter Releaser workflows [#65](https://github.com/jupyter-server/jupyter_server_fileid/pull/65) ([@dlqqq](https://github.com/dlqqq))
+- Fix behavior for OOB move followed by IB move [#63](https://github.com/jupyter-server/jupyter_server_fileid/pull/63) ([@dlqqq](https://github.com/dlqqq))
+
+### Contributors to this release
+
+([GitHub contributors page for this release](https://github.com/jupyter-server/jupyter_server_fileid/graphs/contributors?from=2023-02-23&to=2023-04-09&type=c))
+
+[@dleen](https://github.com/search?q=repo%3Ajupyter-server%2Fjupyter_server_fileid+involves%3Adleen+updated%3A2023-02-23..2023-04-09&type=Issues) | [@dlqqq](https://github.com/search?q=repo%3Ajupyter-server%2Fjupyter_server_fileid+involves%3Adlqqq+updated%3A2023-02-23..2023-04-09&type=Issues)
+
+<!-- <END NEW CHANGELOG ENTRY> -->
+
 ## 0.8.0
 
 ([Full Changelog](https://github.com/jupyter-server/jupyter_server_fileid/compare/v0.7.0...542ccebfcf7713a81a4f2fbd07e8227573c3a282))
@@ -15,8 +32,6 @@
 ([GitHub contributors page for this release](https://github.com/jupyter-server/jupyter_server_fileid/graphs/contributors?from=2023-02-16&to=2023-02-23&type=c))
 
 [@codecov](https://github.com/search?q=repo%3Ajupyter-server%2Fjupyter_server_fileid+involves%3Acodecov+updated%3A2023-02-16..2023-02-23&type=Issues) | [@kevin-bates](https://github.com/search?q=repo%3Ajupyter-server%2Fjupyter_server_fileid+involves%3Akevin-bates+updated%3A2023-02-16..2023-02-23&type=Issues)
-
-<!-- <END NEW CHANGELOG ENTRY> -->
 
 ## 0.7.0
 
