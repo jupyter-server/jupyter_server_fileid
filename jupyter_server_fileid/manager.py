@@ -808,11 +808,10 @@ class LocalFileIdManager(BaseFileIdManager):
         # reasons, but this is needed to handle an edge case:
         # https://github.com/jupyter-server/jupyter_server_fileid/issues/62
         id = self._sync_file(new_path, stat_info)
-        if id is not None:
-            return id
+        if id is None:
+            # if no existing record, create a new one
+            id = self._create(new_path, stat_info)
 
-        # if no existing record, create a new one
-        id = self._create(new_path, stat_info)
         self.con.commit()
         return id
 
