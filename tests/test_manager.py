@@ -148,6 +148,10 @@ def test_validates_db_path(jp_root_dir, any_fid_manager_class):
         )
 
 
+def test_memory_db_path(jp_root_dir, any_fid_manager_class):
+    any_fid_manager_class(root_dir=str(jp_root_dir), db_path=":memory:")
+
+
 def test_different_roots(
     any_fid_manager_class, fid_db_path, jp_root_dir, test_path, test_path_child
 ):

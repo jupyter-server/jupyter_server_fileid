@@ -61,19 +61,20 @@ class BaseFileIdManager(ABC, LoggingConfigurable, metaclass=FileIdManagerMeta):
         help=(
             "The path of the DB file used by File ID manager implementations. "
             "Defaults to `jupyter_data_dir()/file_id_manager.db`."
+            "You can set it to ':memory:' to disable sqlite writing to the filesystem."
         ),
         config=True,
     )
 
     @validate("db_path")
     def _validate_db_path(self, proposal):
-        if proposal["value"] is None:
-            raise TraitError(f"BaseFileIdManager : {proposal['trait'].name} must not be None")
-        if not os.path.isabs(proposal["value"]):
-            raise TraitError(
-                f"BaseFileIdManager : {proposal['trait'].name} must be an absolute path"
-            )
-        return proposal["value"]
+        db_path = proposal["value"]
+        if db_path == ":memory:" or os.path.isabs(db_path):
+            return db_path
+
+        raise TraitError(
+            f"BaseFileIdManager : {proposal['trait'].name} must be an absolute path or \":memory:\""
+        )
 
     JOURNAL_MODES = ["DELETE", "TRUNCATE", "PERSIST", "MEMORY", "WAL", "OFF"]
     db_journal_mode = Unicode(
