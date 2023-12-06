@@ -29,6 +29,7 @@ dependencies = [
 test = [
   "pytest",
   "pytest-cov",
+  "pytest-jupyter",
   "jupyter_server[test]>=1.15, <3"
 ]
 
