@@ -2,7 +2,7 @@ from jupyter_events.logger import EventLogger
 from jupyter_server.extension.application import ExtensionApp
 from traitlets import Instance, Type
 
-from jupyter_server_fileid.handler import FileIDHandler
+from jupyter_server_fileid.handler import FileIDHandler, FilePathHandler
 from jupyter_server_fileid.manager import ArbitraryFileIdManager, BaseFileIdManager
 
 
@@ -23,7 +23,7 @@ class FileIdExtension(ExtensionApp):
         klass=BaseFileIdManager, help="An instance of the File ID manager.", allow_none=True
     )
 
-    handlers = [("/api/fileid", FileIDHandler)]
+    handlers = [("/api/fileid/id", FileIDHandler), ("/api/fileid/path", FilePathHandler)]
 
     def initialize_settings(self):
         self.log.info(f"Configured File ID manager: {self.file_id_manager_class.__name__}")
