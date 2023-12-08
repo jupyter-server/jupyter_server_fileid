@@ -75,6 +75,7 @@ async def test_resource_not_found_in_id_handler(jp_fetch, monkeypatch):
         await jp_fetch("api/fileid/id", params={"path": "test"})
 
     assert err.value.code == 404
+    assert err.value.message.startswith("The ID for file")
 
 
 async def test_resource_not_found_in_path_handler(jp_fetch, monkeypatch):
@@ -87,3 +88,4 @@ async def test_resource_not_found_in_path_handler(jp_fetch, monkeypatch):
         await jp_fetch("api/fileid/path", params={"id": "test"})
 
     assert err.value.code == 404
+    assert err.value.message.startswith("The path for file")
