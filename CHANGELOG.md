@@ -2,6 +2,28 @@
 
 <!-- <START NEW CHANGELOG ENTRY> -->
 
+## 0.9.1
+
+([Full Changelog](https://github.com/jupyter-server/jupyter_server_fileid/compare/v0.9.0...a5e65c99791a20e4684c55f631d2d7fef3c3fdad))
+
+### Bugs fixed
+
+- Add RTD config to fix CI [#73](https://github.com/jupyter-server/jupyter_server_fileid/pull/73) ([@dlqqq](https://github.com/dlqqq))
+
+### Other merged PRs
+
+- Add a simple REST API for fetching a file's ID [#72](https://github.com/jupyter-server/jupyter_server_fileid/pull/72) ([@Zsailer](https://github.com/Zsailer))
+- Allow db_path to be set to ":memory:" [#70](https://github.com/jupyter-server/jupyter_server_fileid/pull/70) ([@cmd-ntrf](https://github.com/cmd-ntrf))
+- provides a summary description for pip [#68](https://github.com/jupyter-server/jupyter_server_fileid/pull/68) ([@stonebig](https://github.com/stonebig))
+
+### Contributors to this release
+
+([GitHub contributors page for this release](https://github.com/jupyter-server/jupyter_server_fileid/graphs/contributors?from=2023-04-09&to=2023-12-19&type=c))
+
+[@cmd-ntrf](https://github.com/search?q=repo%3Ajupyter-server%2Fjupyter_server_fileid+involves%3Acmd-ntrf+updated%3A2023-04-09..2023-12-19&type=Issues) | [@codecov](https://github.com/search?q=repo%3Ajupyter-server%2Fjupyter_server_fileid+involves%3Acodecov+updated%3A2023-04-09..2023-12-19&type=Issues) | [@dlqqq](https://github.com/search?q=repo%3Ajupyter-server%2Fjupyter_server_fileid+involves%3Adlqqq+updated%3A2023-04-09..2023-12-19&type=Issues) | [@stonebig](https://github.com/search?q=repo%3Ajupyter-server%2Fjupyter_server_fileid+involves%3Astonebig+updated%3A2023-04-09..2023-12-19&type=Issues) | [@welcome](https://github.com/search?q=repo%3Ajupyter-server%2Fjupyter_server_fileid+involves%3Awelcome+updated%3A2023-04-09..2023-12-19&type=Issues) | [@Zsailer](https://github.com/search?q=repo%3Ajupyter-server%2Fjupyter_server_fileid+involves%3AZsailer+updated%3A2023-04-09..2023-12-19&type=Issues)
+
+<!-- <END NEW CHANGELOG ENTRY> -->
+
 ## 0.9.0
 
 ([Full Changelog](https://github.com/jupyter-server/jupyter_server_fileid/compare/v0.8.0...505806162b4df60b4cbb461cfec1266b81df32ce))
@@ -16,8 +38,6 @@
 ([GitHub contributors page for this release](https://github.com/jupyter-server/jupyter_server_fileid/graphs/contributors?from=2023-02-23&to=2023-04-09&type=c))
 
 [@dleen](https://github.com/search?q=repo%3Ajupyter-server%2Fjupyter_server_fileid+involves%3Adleen+updated%3A2023-02-23..2023-04-09&type=Issues) | [@dlqqq](https://github.com/search?q=repo%3Ajupyter-server%2Fjupyter_server_fileid+involves%3Adlqqq+updated%3A2023-02-23..2023-04-09&type=Issues)
-
-<!-- <END NEW CHANGELOG ENTRY> -->
 
 ## 0.8.0
 
