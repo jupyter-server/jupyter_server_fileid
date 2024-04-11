@@ -2,6 +2,8 @@ import ntpath
 import os
 import posixpath
 import sys
+import sqlite3
+
 from unittest.mock import patch
 
 import pytest
@@ -617,3 +619,31 @@ def test_db_journal_mode(any_fid_manager_class, fid_db_path, jp_root_dir, db_jou
         cursor = fid_manager.con.execute("PRAGMA journal_mode")
         actual_journal_mode = cursor.fetchone()
         assert actual_journal_mode[0].upper() == expected_journal_mode
+
+
+
+def test_multiple_fileIdManager_connections_after_exception(fid_db_path):
+    original_file_path = "/path/to/file"
+    copy_location = "/path/to/copy"
+    another_copy_location = "/path/to/other"
+
+    # Setup an initial file ID manager connected to a sqlite database.
+    manager_1 = ArbitraryFileIdManager(db_path=fid_db_path)
+
+    # Create an initial ID for this file
+    manager_1.index(original_file_path)
+    # Copy the file
+    manager_1.copy(original_file_path, copy_location)
+    # Try copying the file again.
+    try:
+        manager_1.copy(original_file_path, copy_location)
+    # We expect this to fail because the file is already in the database.
+    except sqlite3.IntegrityError:
+        pass
+
+    # Now the database is locked and no other connections can be made.
+    # Start a second connection to the database and demonstrate
+    # that the database is now stuck in a locked state.
+    manager_2 = ArbitraryFileIdManager(db_path=fid_db_path)
+    manager_2.copy(original_file_path, another_copy_location)
+
