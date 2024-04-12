@@ -15,7 +15,6 @@ from jupyter_server_fileid.manager import (
     LocalFileIdManager,
 )
 
-
 @pytest.fixture
 def test_path(fs_helpers):
     path = "test_path"
@@ -621,7 +620,13 @@ def test_db_journal_mode(any_fid_manager_class, fid_db_path, jp_root_dir, db_jou
         assert actual_journal_mode[0].upper() == expected_journal_mode
 
 
-
+# This test demonstrates an issue raised in 
+# https://github.com/jupyter-server/jupyter_server_fileid/pull/76
+# which was later fixed in 
+# https://github.com/jupyter-server/jupyter_server_fileid/pull/77
+#
+# We use this unit test to catch this edge case and ensure
+# its covered going forward.
 def test_multiple_fileIdManager_connections_after_exception(fid_db_path):
     original_file_path = "/path/to/file"
     copy_location = "/path/to/copy"
@@ -635,15 +640,21 @@ def test_multiple_fileIdManager_connections_after_exception(fid_db_path):
     # Copy the file
     manager_1.copy(original_file_path, copy_location)
     # Try copying the file again.
+    excepted = False
     try:
         manager_1.copy(original_file_path, copy_location)
     # We expect this to fail because the file is already in the database.
     except sqlite3.IntegrityError:
+        excepted = True
         pass
 
-    # Now the database is locked and no other connections can be made.
-    # Start a second connection to the database and demonstrate
-    # that the database is now stuck in a locked state.
+    assert excepted, "Copying to the same location should raise an exception, but it did not here."
+
+    # Previously, these actions locked the database for future connections.
+    # This was fixed in: https://github.com/jupyter-server/jupyter_server_fileid/pull/77
+
+    # Try making a second connection that writes to the DB and
+    # make sure no exceptions were raised.
     manager_2 = ArbitraryFileIdManager(db_path=fid_db_path)
     manager_2.copy(original_file_path, another_copy_location)
 
