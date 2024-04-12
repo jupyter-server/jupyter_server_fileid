@@ -312,21 +312,21 @@ class ArbitraryFileIdManager(BaseFileIdManager):
 
     def _create(self, path: str) -> str:
         path = self._normalize_path(path)
+        row = self.con.execute("SELECT id FROM Files WHERE path = ?", (path,)).fetchone()
+        existing_id = row and row[0]
+
+        if existing_id:
+            return existing_id
+        
         id = self._uuid()
         self.con.execute("INSERT INTO Files (id, path) VALUES (?, ?)", (id, path))
         return id
 
     def index(self, path: str) -> str:
+        # create new record
         with self.con:
-            path = self._normalize_path(path)
-            row = self.con.execute("SELECT id FROM Files WHERE path = ?", (path,)).fetchone()
-            existing_id = row and row[0]
-
-            if existing_id:
-                return existing_id
-
-            # create new record
             id = self._create(path)
+            self.con.commit()
             return id
 
     def get_id(self, path: str) -> Optional[str]:
@@ -612,6 +612,7 @@ class LocalFileIdManager(BaseFileIdManager):
             "SELECT id, path, crtime FROM Files WHERE ino = ?", (stat_info.ino,)
         ).fetchone()
 
+
         # if ino is not in database, return None
         if src is None:
             return None
@@ -625,6 +626,7 @@ class LocalFileIdManager(BaseFileIdManager):
         # otherwise update existing record with new path, moving any indexed
         # children if necessary. then return its id
         self._update(id, path=path)
+
         if stat_info.is_dir and old_path != path:
             self._move_recursive(old_path, path)
             self._update_cursor = True
@@ -671,6 +673,17 @@ class LocalFileIdManager(BaseFileIdManager):
         dangerous and may throw a runtime error if the file is not guaranteed to
         have a unique `ino`.
         """
+        # If the path exists 
+        existing_id, ino = None, None
+        row = self.con.execute("SELECT id, ino FROM Files WHERE path = ?", (path,)).fetchone()
+        if row: 
+            existing_id, ino = row
+
+        # If the file ID already exists and the current file matches our records
+        # return the file ID instead of creating a new one. 
+        if existing_id and stat_info.ino == ino:
+            return existing_id
+            
         id = self._uuid()
         self.con.execute(
             "INSERT INTO Files (id, path, ino, crtime, mtime, is_dir) VALUES (?, ?, ?, ?, ?, ?)",
