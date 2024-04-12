@@ -121,7 +121,10 @@ class BaseFileIdManager(ABC, LoggingConfigurable, metaclass=FileIdManagerMeta):
         for record in records:
             id, old_recpath = record
             new_recpath = path_mgr.join(new_path, path_mgr.relpath(old_recpath, start=old_path))
-            self.con.execute("UPDATE Files SET path = ? WHERE id = ?", (new_recpath, id))
+            try:
+                self.con.execute("UPDATE Files SET path = ? WHERE id = ?", (new_recpath, id))
+            except Exception as err:
+                self.log.error(err)
 
     def _copy_recursive(self, from_path: str, to_path: str, path_mgr: Any = os.path) -> None:
         """Copy all children of a given directory at `from_path` to a new
@@ -134,9 +137,12 @@ class BaseFileIdManager(ABC, LoggingConfigurable, metaclass=FileIdManagerMeta):
         for record in records:
             (from_recpath,) = record
             to_recpath = path_mgr.join(to_path, path_mgr.relpath(from_recpath, start=from_path))
-            self.con.execute(
-                "INSERT INTO Files (id, path) VALUES (?, ?)", (self._uuid(), to_recpath)
-            )
+            try:
+                self.con.execute(
+                    "INSERT INTO Files (id, path) VALUES (?, ?)", (self._uuid(), to_recpath)
+                )
+            except Exception as err:
+                self.log.error(err)
 
     def _delete_recursive(self, path: str, path_mgr: Any = os.path) -> None:
         """Delete all children of a given directory, delimited by `sep`."""
@@ -313,7 +319,10 @@ class ArbitraryFileIdManager(BaseFileIdManager):
     def _create(self, path: str) -> str:
         path = self._normalize_path(path)
         id = self._uuid()
-        self.con.execute("INSERT INTO Files (id, path) VALUES (?, ?)", (id, path))
+        try:
+            self.con.execute("INSERT INTO Files (id, path) VALUES (?, ?)", (id, path))
+        except Exception as err:
+            self.log.error(err)
         return id
 
     def index(self, path: str) -> str:
@@ -346,7 +355,10 @@ class ArbitraryFileIdManager(BaseFileIdManager):
         id = row and row[0]
 
         if id:
-            self.con.execute("UPDATE Files SET path = ? WHERE path = ?", (new_path, old_path))
+            try:
+                self.con.execute("UPDATE Files SET path = ? WHERE path = ?", (new_path, old_path))
+            except Exception as err:
+                self.log.error(err)
             self._move_recursive(old_path, new_path, posixpath)
         else:
             id = self._create(new_path)
@@ -673,10 +685,13 @@ class LocalFileIdManager(BaseFileIdManager):
         have a unique `ino`.
         """
         id = self._uuid()
-        self.con.execute(
-            "INSERT INTO Files (id, path, ino, crtime, mtime, is_dir) VALUES (?, ?, ?, ?, ?, ?)",
-            (id, path, stat_info.ino, stat_info.crtime, stat_info.mtime, stat_info.is_dir),
-        )
+        try:
+            self.con.execute(
+                "INSERT INTO Files (id, path, ino, crtime, mtime, is_dir) VALUES (?, ?, ?, ?, ?, ?)",
+                (id, path, stat_info.ino, stat_info.crtime, stat_info.mtime, stat_info.is_dir),
+            )
+        except Exception as err: 
+            self.log.error(err)
         return id
 
     def _update(self, id, stat_info=None, path=None):
@@ -694,26 +709,29 @@ class LocalFileIdManager(BaseFileIdManager):
         dangerous and may throw a runtime error if the file is not guaranteed to
         have a unique `ino`.
         """
-        if stat_info and path:
-            self.con.execute(
-                "UPDATE Files SET ino = ?, crtime = ?, mtime = ?, path = ? WHERE id = ?",
-                (stat_info.ino, stat_info.crtime, stat_info.mtime, path, id),
-            )
-            return
+        try:
+            if stat_info and path:
+                self.con.execute(
+                    "UPDATE Files SET ino = ?, crtime = ?, mtime = ?, path = ? WHERE id = ?",
+                    (stat_info.ino, stat_info.crtime, stat_info.mtime, path, id),
+                )
+                return
 
-        if stat_info:
-            self.con.execute(
-                "UPDATE Files SET ino = ?, crtime = ?, mtime = ? WHERE id = ?",
-                (stat_info.ino, stat_info.crtime, stat_info.mtime, id),
-            )
-            return
+            if stat_info:
+                self.con.execute(
+                    "UPDATE Files SET ino = ?, crtime = ?, mtime = ? WHERE id = ?",
+                    (stat_info.ino, stat_info.crtime, stat_info.mtime, id),
+                )
+                return
 
-        if path:
-            self.con.execute(
-                "UPDATE Files SET path = ? WHERE id = ?",
-                (path, id),
-            )
-            return
+            if path:
+                self.con.execute(
+                    "UPDATE Files SET path = ? WHERE id = ?",
+                    (path, id),
+                )
+                return
+        except Exception as err:
+            self.log.error(err)
 
     def index(self, path, stat_info=None, commit=True):
         """Returns the file ID for the file at `path`, creating a new file ID if
