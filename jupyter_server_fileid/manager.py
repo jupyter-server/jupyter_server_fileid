@@ -317,7 +317,7 @@ class ArbitraryFileIdManager(BaseFileIdManager):
 
         if existing_id:
             return existing_id
-        
+
         id = self._uuid()
         self.con.execute("INSERT INTO Files (id, path) VALUES (?, ?)", (id, path))
         return id
@@ -612,7 +612,6 @@ class LocalFileIdManager(BaseFileIdManager):
             "SELECT id, path, crtime FROM Files WHERE ino = ?", (stat_info.ino,)
         ).fetchone()
 
-
         # if ino is not in database, return None
         if src is None:
             return None
@@ -673,17 +672,17 @@ class LocalFileIdManager(BaseFileIdManager):
         dangerous and may throw a runtime error if the file is not guaranteed to
         have a unique `ino`.
         """
-        # If the path exists 
+        # If the path exists
         existing_id, ino = None, None
         row = self.con.execute("SELECT id, ino FROM Files WHERE path = ?", (path,)).fetchone()
-        if row: 
+        if row:
             existing_id, ino = row
 
         # If the file ID already exists and the current file matches our records
-        # return the file ID instead of creating a new one. 
+        # return the file ID instead of creating a new one.
         if existing_id and stat_info.ino == ino:
             return existing_id
-            
+
         id = self._uuid()
         self.con.execute(
             "INSERT INTO Files (id, path, ino, crtime, mtime, is_dir) VALUES (?, ?, ?, ?, ?, ?)",
