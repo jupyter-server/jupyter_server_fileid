@@ -84,8 +84,9 @@ jobs:
         uses: jupyterlab/maintainer-tools/.github/actions/base-setup@v1
         with:
           python_version: "3.7"
-      - name: Install miniumum versions
-        uses: jupyterlab/maintainer-tools/.github/actions/install-minimums@v1
+          dependency_type: minimum
+      - name: Install
+        run: pip install -e ".[test]"
       - name: Run the unit tests
         run: |
           pytest -vv -W default || pytest -vv -W default --lf
