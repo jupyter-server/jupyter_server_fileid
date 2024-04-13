@@ -1,9 +1,8 @@
 import ntpath
 import os
 import posixpath
-import sys
 import sqlite3
-
+import sys
 from unittest.mock import patch
 
 import pytest
@@ -14,6 +13,7 @@ from jupyter_server_fileid.manager import (
     BaseFileIdManager,
     LocalFileIdManager,
 )
+
 
 @pytest.fixture
 def test_path(fs_helpers):
@@ -620,9 +620,9 @@ def test_db_journal_mode(any_fid_manager_class, fid_db_path, jp_root_dir, db_jou
         assert actual_journal_mode[0].upper() == expected_journal_mode
 
 
-# This test demonstrates an issue raised in 
+# This test demonstrates an issue raised in
 # https://github.com/jupyter-server/jupyter_server_fileid/pull/76
-# which was later fixed in 
+# which was later fixed in
 # https://github.com/jupyter-server/jupyter_server_fileid/pull/77
 #
 # We use this unit test to catch this edge case and ensure
@@ -657,4 +657,3 @@ def test_multiple_fileIdManager_connections_after_exception(fid_db_path):
     # make sure no exceptions were raised.
     manager_2 = ArbitraryFileIdManager(db_path=fid_db_path)
     manager_2.copy(original_file_path, another_copy_location)
-
