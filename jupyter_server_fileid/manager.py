@@ -317,17 +317,17 @@ class ArbitraryFileIdManager(BaseFileIdManager):
         return id
 
     def index(self, path: str) -> str:
-        path = self._normalize_path(path)
-        row = self.con.execute("SELECT id FROM Files WHERE path = ?", (path,)).fetchone()
-        existing_id = row and row[0]
+        with self.con:
+            path = self._normalize_path(path)
+            row = self.con.execute("SELECT id FROM Files WHERE path = ?", (path,)).fetchone()
+            existing_id = row and row[0]
 
-        if existing_id:
-            return existing_id
+            if existing_id:
+                return existing_id
 
-        # create new record
-        id = self._create(path)
-        self.con.commit()
-        return id
+            # create new record
+            id = self._create(path)
+            return id
 
     def get_id(self, path: str) -> Optional[str]:
         path = self._normalize_path(path)
@@ -340,37 +340,36 @@ class ArbitraryFileIdManager(BaseFileIdManager):
         return self._from_normalized_path(path)
 
     def move(self, old_path: str, new_path: str) -> None:
-        old_path = self._normalize_path(old_path)
-        new_path = self._normalize_path(new_path)
-        row = self.con.execute("SELECT id FROM Files WHERE path = ?", (old_path,)).fetchone()
-        id = row and row[0]
+        with self.con:
+            old_path = self._normalize_path(old_path)
+            new_path = self._normalize_path(new_path)
+            row = self.con.execute("SELECT id FROM Files WHERE path = ?", (old_path,)).fetchone()
+            id = row and row[0]
 
-        if id:
-            self.con.execute("UPDATE Files SET path = ? WHERE path = ?", (new_path, old_path))
-            self._move_recursive(old_path, new_path, posixpath)
-        else:
-            id = self._create(new_path)
+            if id:
+                self.con.execute("UPDATE Files SET path = ? WHERE path = ?", (new_path, old_path))
+                self._move_recursive(old_path, new_path, posixpath)
+            else:
+                id = self._create(new_path)
 
-        self.con.commit()
-        return id
+            return id
 
     def copy(self, from_path: str, to_path: str) -> Optional[str]:
-        from_path = self._normalize_path(from_path)
-        to_path = self._normalize_path(to_path)
+        with self.con:
+            from_path = self._normalize_path(from_path)
+            to_path = self._normalize_path(to_path)
 
-        id = self._create(to_path)
-        self._copy_recursive(from_path, to_path, posixpath)
+            id = self._create(to_path)
+            self._copy_recursive(from_path, to_path, posixpath)
 
-        self.con.commit()
-        return id
+            return id
 
     def delete(self, path: str) -> None:
-        path = self._normalize_path(path)
+        with self.con:
+            path = self._normalize_path(path)
 
-        self.con.execute("DELETE FROM Files WHERE path = ?", (path,))
-        self._delete_recursive(path, posixpath)
-
-        self.con.commit()
+            self.con.execute("DELETE FROM Files WHERE path = ?", (path,))
+            self._delete_recursive(path, posixpath)
 
     def save(self, path: str) -> None:
         return
@@ -718,39 +717,38 @@ class LocalFileIdManager(BaseFileIdManager):
     def index(self, path, stat_info=None, commit=True):
         """Returns the file ID for the file at `path`, creating a new file ID if
         one does not exist. Returns None only if file does not exist at path."""
-        path = self._normalize_path(path)
-        stat_info = stat_info or self._stat(path)
-        if not stat_info:
-            return None
+        with self.con:
+            path = self._normalize_path(path)
+            stat_info = stat_info or self._stat(path)
+            if not stat_info:
+                return None
 
-        # if file is symlink, then index the path it refers to instead
-        if stat_info.is_symlink:
-            return self.index(os.path.realpath(path))
+            # if file is symlink, then index the path it refers to instead
+            if stat_info.is_symlink:
+                return self.index(os.path.realpath(path))
 
-        # sync file at path and return file ID if it exists
-        id = self._sync_file(path, stat_info)
-        if id is not None:
+            # sync file at path and return file ID if it exists
+            id = self._sync_file(path, stat_info)
+            if id is not None:
+                return id
+
+            # otherwise, create a new record and return the file ID
+            id = self._create(path, stat_info)
             return id
-
-        # otherwise, create a new record and return the file ID
-        id = self._create(path, stat_info)
-        if commit:
-            self.con.commit()
-        return id
 
     def get_id(self, path):
         """Retrieves the file ID associated with a file path. Returns None if
         the file has not yet been indexed or does not exist at the given
         path."""
-        path = self._normalize_path(path)
-        stat_info = self._stat(path)
-        if not stat_info:
-            return None
+        with self.con:
+            path = self._normalize_path(path)
+            stat_info = self._stat(path)
+            if not stat_info:
+                return None
 
-        # then sync file at path and retrieve id, if any
-        id = self._sync_file(path, stat_info)
-        self.con.commit()
-        return id
+            # then sync file at path and retrieve id, if any
+            id = self._sync_file(path, stat_info)
+            return id
 
     def get_path(self, id):
         """Retrieves the file path associated with a file ID. The file path is
@@ -795,26 +793,26 @@ class LocalFileIdManager(BaseFileIdManager):
     def move(self, old_path, new_path):
         """Handles file moves by updating the file path of the associated file
         ID.  Returns the file ID. Returns None if file does not exist at new_path."""
-        old_path = self._normalize_path(old_path)
-        new_path = self._normalize_path(new_path)
+        with self.con:
+            old_path = self._normalize_path(old_path)
+            new_path = self._normalize_path(new_path)
 
-        # verify file exists at new_path
-        stat_info = self._stat(new_path)
-        if stat_info is None:
-            return None
+            # verify file exists at new_path
+            stat_info = self._stat(new_path)
+            if stat_info is None:
+                return None
 
-        # sync the file and see if it was already indexed
-        #
-        # originally this method did not call _sync_file() for performance
-        # reasons, but this is needed to handle an edge case:
-        # https://github.com/jupyter-server/jupyter_server_fileid/issues/62
-        id = self._sync_file(new_path, stat_info)
-        if id is None:
-            # if no existing record, create a new one
-            id = self._create(new_path, stat_info)
+            # sync the file and see if it was already indexed
+            #
+            # originally this method did not call _sync_file() for performance
+            # reasons, but this is needed to handle an edge case:
+            # https://github.com/jupyter-server/jupyter_server_fileid/issues/62
+            id = self._sync_file(new_path, stat_info)
+            if id is None:
+                # if no existing record, create a new one
+                id = self._create(new_path, stat_info)
 
-        self.con.commit()
-        return id
+            return id
 
     def _copy_recursive(self, from_path: str, to_path: str, _: str = "") -> None:
         """Copy all children of a given directory at `from_path` to a new
@@ -859,13 +857,13 @@ class LocalFileIdManager(BaseFileIdManager):
     def delete(self, path):
         """Handles file deletions by deleting the associated record in the File
         table. Returns None."""
-        path = self._normalize_path(path)
+        with self.con:
+            path = self._normalize_path(path)
 
-        if os.path.isdir(path):
-            self._delete_recursive(path)
+            if os.path.isdir(path):
+                self._delete_recursive(path)
 
-        self.con.execute("DELETE FROM Files WHERE path = ?", (path,))
-        self.con.commit()
+            self.con.execute("DELETE FROM Files WHERE path = ?", (path,))
 
     def save(self, path):
         """Handles file saves (edits) by updating recorded stat info.
@@ -878,21 +876,21 @@ class LocalFileIdManager(BaseFileIdManager):
         JupyterLab.  This would (wrongly) preserve the association b/w the old
         file ID and the current path rather than create a new file ID.
         """
-        path = self._normalize_path(path)
+        with self.con:
+            path = self._normalize_path(path)
 
-        # look up record by ino and path
-        stat_info = self._stat(path)
-        row = self.con.execute(
-            "SELECT id FROM Files WHERE ino = ? AND path = ?", (stat_info.ino, path)
-        ).fetchone()
-        # if no record exists, return early
-        if row is None:
-            return
+            # look up record by ino and path
+            stat_info = self._stat(path)
+            row = self.con.execute(
+                "SELECT id FROM Files WHERE ino = ? AND path = ?", (stat_info.ino, path)
+            ).fetchone()
+            # if no record exists, return early
+            if row is None:
+                return
 
-        # otherwise, update the stat info
-        (id,) = row
-        self._update(id, stat_info)
-        self.con.commit()
+            # otherwise, update the stat info
+            (id,) = row
+            self._update(id, stat_info)
 
     def get_handlers_by_action(self) -> Dict[str, Optional[Callable[[Dict[str, Any]], Any]]]:
         return {
