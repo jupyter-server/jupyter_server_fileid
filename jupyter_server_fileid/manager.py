@@ -326,7 +326,6 @@ class ArbitraryFileIdManager(BaseFileIdManager):
         # create new record
         with self.con:
             id = self._create(path)
-            self.con.commit()
             return id
 
     def get_id(self, path: str) -> Optional[str]:
