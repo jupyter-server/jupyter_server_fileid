@@ -386,8 +386,14 @@ class ArbitraryFileIdManager(BaseFileIdManager):
         """Cleans up `ArbitraryFileIdManager` by committing any pending
         transactions and closing the connection."""
         if hasattr(self, "con"):
-            self.con.commit()
-            self.con.close()
+            # If garbage collection happens in a different thread than the thread where
+            # the SQLite object was created, committing will fail anyway. We just ignore
+            # the exception if this is the case.
+            try:
+                self.con.commit()
+                self.con.close()
+            except sqlite3.ProgrammingError:
+                pass
 
 
 class LocalFileIdManager(BaseFileIdManager):
