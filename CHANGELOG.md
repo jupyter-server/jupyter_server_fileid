@@ -2,6 +2,22 @@
 
 <!-- <START NEW CHANGELOG ENTRY> -->
 
+## 0.9.3
+
+([Full Changelog](https://github.com/jupyter-server/jupyter_server_fileid/compare/v0.9.2...7ee71f63fd6fce6535f8f99f9d47199cd934bb31))
+
+### Merged PRs
+
+- Don't commit when garbage-collected in a different thread [#81](https://github.com/jupyter-server/jupyter_server_fileid/pull/81) ([@davidbrochart](https://github.com/davidbrochart))
+
+### Contributors to this release
+
+([GitHub contributors page for this release](https://github.com/jupyter-server/jupyter_server_fileid/graphs/contributors?from=2024-04-18&to=2024-09-06&type=c))
+
+[@davidbrochart](https://github.com/search?q=repo%3Ajupyter-server%2Fjupyter_server_fileid+involves%3Adavidbrochart+updated%3A2024-04-18..2024-09-06&type=Issues)
+
+<!-- <END NEW CHANGELOG ENTRY> -->
+
 ## 0.9.2
 
 ([Full Changelog](https://github.com/jupyter-server/jupyter_server_fileid/compare/v0.9.1...501a1230ac2e934c70bbb7267144f16fe6ed3484))
@@ -20,8 +36,6 @@
 ([GitHub contributors page for this release](https://github.com/jupyter-server/jupyter_server_fileid/graphs/contributors?from=2023-12-19&to=2024-04-18&type=c))
 
 [@blink1073](https://github.com/search?q=repo%3Ajupyter-server%2Fjupyter_server_fileid+involves%3Ablink1073+updated%3A2023-12-19..2024-04-18&type=Issues) | [@welcome](https://github.com/search?q=repo%3Ajupyter-server%2Fjupyter_server_fileid+involves%3Awelcome+updated%3A2023-12-19..2024-04-18&type=Issues) | [@Zsailer](https://github.com/search?q=repo%3Ajupyter-server%2Fjupyter_server_fileid+involves%3AZsailer+updated%3A2023-12-19..2024-04-18&type=Issues)
-
-<!-- <END NEW CHANGELOG ENTRY> -->
 
 ## 0.9.1
 
