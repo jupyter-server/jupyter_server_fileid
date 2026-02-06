@@ -647,9 +647,7 @@ class LocalFileIdManager(BaseFileIdManager):
             raw_stat.st_ctime_ns
             if os.name == "nt"
             # st_birthtime_ns is not supported, so we have to compute it manually
-            else int(raw_stat.st_birthtime * 1e9)
-            if hasattr(raw_stat, "st_birthtime")
-            else None
+            else int(raw_stat.st_birthtime * 1e9) if hasattr(raw_stat, "st_birthtime") else None
         )
         stat_info.mtime = raw_stat.st_mtime_ns
         stat_info.is_dir = stat.S_ISDIR(raw_stat.st_mode)
