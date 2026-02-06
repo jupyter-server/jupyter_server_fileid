@@ -1,4 +1,5 @@
 """A Jupyter Server extension providing an implementation of the File ID service."""
+
 from typing import Any, Dict, List
 
 from .extension import FileIdExtension
