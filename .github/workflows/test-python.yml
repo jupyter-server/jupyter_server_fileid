@@ -130,6 +130,7 @@ jobs:
     needs:
       - pytest
       - pre-commit
+      - test_minimum_versions
       - test_prereleases
       - make_sdist
       - test_sdist
