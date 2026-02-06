@@ -1,3 +1,5 @@
+from typing import Any, Dict, List, Tuple
+
 from jupyter_events.logger import EventLogger
 from jupyter_server.extension.application import ExtensionApp
 from traitlets import Instance, Type
@@ -23,10 +25,14 @@ class FileIdExtension(ExtensionApp):
         klass=BaseFileIdManager, help="An instance of the File ID manager.", allow_none=True
     )
 
-    handlers = [("/api/fileid/id", FileIDHandler), ("/api/fileid/path", FilePathHandler)]
+    handlers: List[Tuple[str, type]] = [
+        ("/api/fileid/id", FileIDHandler),
+        ("/api/fileid/path", FilePathHandler),
+    ]
 
-    def initialize_settings(self):
+    def initialize_settings(self) -> None:
         self.log.info(f"Configured File ID manager: {self.file_id_manager_class.__name__}")
+        assert self.serverapp is not None
         self.file_id_manager = self.file_id_manager_class(
             log=self.log, root_dir=self.serverapp.root_dir, config=self.config
         )
@@ -36,10 +42,10 @@ class FileIdExtension(ExtensionApp):
         if "event_logger" in self.settings:
             self.initialize_event_listeners()
 
-    def initialize_event_listeners(self):
+    def initialize_event_listeners(self) -> None:
         handlers_by_action = self.file_id_manager.get_handlers_by_action()
 
-        async def cm_listener(logger: EventLogger, schema_id: str, data: dict) -> None:
+        async def cm_listener(logger: EventLogger, schema_id: str, data: Dict[str, Any]) -> None:
             handler = handlers_by_action[data["action"]]
             if handler:
                 handler(data)
