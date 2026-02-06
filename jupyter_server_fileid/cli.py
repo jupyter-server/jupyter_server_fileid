@@ -7,13 +7,13 @@ from .manager import default_db_path
 
 @click.group()
 @click.version_option()
-def main():
+def main() -> None:
     """Jupyter File ID server extension CLI."""
     pass
 
 
 @main.command("drop")
-def drop():
+def drop() -> None:
     """Drops the file ID table at the default path."""
     con = sqlite3.connect(default_db_path)
     con.execute("DROP TABLE Files;")
