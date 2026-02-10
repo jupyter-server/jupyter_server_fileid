@@ -1,25 +1,26 @@
 import os
 import shutil
 from pathlib import Path
+from typing import Any, Dict, Generator, Type, Union
 
 import pytest
 
-from jupyter_server_fileid.manager import ArbitraryFileIdManager, LocalFileIdManager
+from jupyter_server_fileid.manager import ArbitraryFileIdManager, BaseFileIdManager, LocalFileIdManager
 
 
 @pytest.fixture
-def jp_server_config(jp_server_config):
+def jp_server_config(jp_server_config: Dict[str, Any]) -> Dict[str, Any]:
     return {"ServerApp": {"jpserver_extensions": {"jupyter_server_fileid": True}}}
 
 
 @pytest.fixture
-def fid_db_path(jp_data_dir):
+def fid_db_path(jp_data_dir: Path) -> str:
     """Fixture that returns the file ID DB path used for tests."""
     return str(jp_data_dir / "fileidmanager_test.db")
 
 
 @pytest.fixture(autouse=True)
-def delete_fid_db(fid_db_path):
+def delete_fid_db(fid_db_path: str) -> Generator[None, None, None]:
     """Fixture that automatically deletes the DB file after each test."""
     yield
     try:
@@ -29,7 +30,7 @@ def delete_fid_db(fid_db_path):
 
 
 @pytest.fixture
-def fid_manager(fid_db_path, jp_root_dir):
+def fid_manager(fid_db_path: str, jp_root_dir: Path) -> LocalFileIdManager:
     """Fixture returning a test-configured instance of `LocalFileIdManager`."""
     fid_manager = LocalFileIdManager(db_path=fid_db_path, root_dir=str(jp_root_dir))
     # disable journal so no temp journal file is created under `tmp_path`.
@@ -41,7 +42,7 @@ def fid_manager(fid_db_path, jp_root_dir):
 
 
 @pytest.fixture
-def arbitrary_fid_manager(fid_db_path, jp_root_dir):
+def arbitrary_fid_manager(fid_db_path: str, jp_root_dir: Path) -> ArbitraryFileIdManager:
     """Fixture returning a test-configured instance of `ArbitraryFileIdManager`."""
     arbitrary_fid_manager = ArbitraryFileIdManager(db_path=fid_db_path, root_dir=str(jp_root_dir))
     arbitrary_fid_manager.con.execute("PRAGMA journal_mode = OFF")
@@ -49,15 +50,20 @@ def arbitrary_fid_manager(fid_db_path, jp_root_dir):
 
 
 @pytest.fixture(params=["local", "arbitrary"])
-def any_fid_manager_class(request):
+def any_fid_manager_class(request: pytest.FixtureRequest) -> Type[BaseFileIdManager]:
     """Parametrized fixture that runs the test with each of the default File ID
     manager implementations."""
-    class_by_param = {"local": LocalFileIdManager, "arbitrary": ArbitraryFileIdManager}
+    class_by_param: Dict[str, Type[BaseFileIdManager]] = {
+        "local": LocalFileIdManager,
+        "arbitrary": ArbitraryFileIdManager,
+    }
     return class_by_param[request.param]
 
 
 @pytest.fixture
-def any_fid_manager(any_fid_manager_class, fid_db_path, jp_root_dir):
+def any_fid_manager(
+    any_fid_manager_class: Type[BaseFileIdManager], fid_db_path: str, jp_root_dir: Path
+) -> BaseFileIdManager:
     fid_manager = any_fid_manager_class(db_path=fid_db_path, root_dir=str(jp_root_dir))
     fid_manager.con.execute("PRAGMA journal_mode = OFF")
     return fid_manager
