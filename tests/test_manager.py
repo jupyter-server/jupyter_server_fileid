@@ -98,12 +98,16 @@ def get_id_nosync(fid_manager, path):
     else:
         path = _normalize_path_arbitrary(fid_manager, path)
 
-    row = fid_manager.con.execute("SELECT id FROM Files WHERE path = ?", (path,)).fetchone()
+    row = fid_manager.con.execute(
+        "SELECT id FROM Files WHERE path = ?", (path,)
+    ).fetchone()
     return row and row[0]
 
 
 def get_path_nosync(fid_manager, id):
-    row = fid_manager.con.execute("SELECT path FROM Files WHERE id = ?", (id,)).fetchone()
+    row = fid_manager.con.execute(
+        "SELECT path FROM Files WHERE id = ?", (id,)
+    ).fetchone()
     path = row and row[0]
 
     if path is None:
@@ -157,7 +161,9 @@ def test_different_roots(
 ):
     """Assert that default FIM implementations assign the same file the same
     file ID agnostic of contents manager root."""
-    fid_manager_1 = any_fid_manager_class(db_path=fid_db_path, root_dir=str(jp_root_dir))
+    fid_manager_1 = any_fid_manager_class(
+        db_path=fid_db_path, root_dir=str(jp_root_dir)
+    )
     fid_manager_2 = any_fid_manager_class(
         db_path=fid_db_path, root_dir=str(jp_root_dir / test_path)
     )
@@ -172,7 +178,9 @@ def test_different_roots_arbitrary(fid_db_path):
     """Assert that ArbitraryFileIdManager assigns the same file the same file ID
     agnostic of contents manager root, even if non-local."""
     manager_1 = ArbitraryFileIdManager(db_path=fid_db_path, root_dir="s3://bucket")
-    manager_2 = ArbitraryFileIdManager(db_path=fid_db_path, root_dir="s3://bucket/folder")
+    manager_2 = ArbitraryFileIdManager(
+        db_path=fid_db_path, root_dir="s3://bucket/folder"
+    )
 
     id_1 = manager_1.index("folder/child")
     id_2 = manager_2.index("child")
@@ -230,7 +238,9 @@ def test_index_after_deleting_dir_in_same_path(fid_manager, test_path, fs_helper
 
 
 @pytest.mark.skipif(not crtime_support, reason="Requires crtime support.")
-def test_index_after_deleting_regfile_in_same_path(fid_manager, test_path_child, fs_helpers):
+def test_index_after_deleting_regfile_in_same_path(
+    fid_manager, test_path_child, fs_helpers
+):
     old_id = fid_manager.index(test_path_child)
 
     fs_helpers.delete(test_path_child)
@@ -327,7 +337,9 @@ def test_get_id_oob_move_recursive(
 # at the old path.  this is what forces relaxation of the UNIQUE constraint on
 # path column, since we need to keep records of deleted files that used to
 # occupy a path, which is possibly occupied by a new file.
-def test_get_id_oob_move_new_file_at_old_path(fid_manager, old_path, new_path, fs_helpers):
+def test_get_id_oob_move_new_file_at_old_path(
+    fid_manager, old_path, new_path, fs_helpers
+):
     old_id = fid_manager.index(old_path)
     other_path = "other_path"
 
@@ -357,7 +369,8 @@ def test_get_path_returns_api_path(jp_root_dir, fid_db_path):
     test_path = "a\\b\\c"
     expected_path = "a/b/c"
     manager = ArbitraryFileIdManager(
-        root_dir=ntpath.join("c:", ntpath.normpath(str(jp_root_dir))), db_path=fid_db_path
+        root_dir=ntpath.join("c:", ntpath.normpath(str(jp_root_dir))),
+        db_path=fid_db_path,
     )
 
     id = manager.index(test_path)
@@ -408,7 +421,9 @@ def test_get_path_oob_move_into_unindexed(
     assert fid_manager.get_path(id) == new_path_child
 
 
-def test_get_path_oob_move_back_to_original_path(fid_manager, old_path, new_path, fs_helpers):
+def test_get_path_oob_move_back_to_original_path(
+    fid_manager, old_path, new_path, fs_helpers
+):
     id = fid_manager.index(old_path)
     fs_helpers.move(old_path, new_path)
 
@@ -419,8 +434,12 @@ def test_get_path_oob_move_back_to_original_path(fid_manager, old_path, new_path
 
 # move file into an indexed-but-moved directory
 # this test should work regardless of whether crtime is supported on platform
-@pytest.mark.parametrize("stub_stat_crtime", [True, False], indirect=["stub_stat_crtime"])
-def test_get_path_oob_move_nested(fid_manager, old_path, new_path, stub_stat_crtime, fs_helpers):
+@pytest.mark.parametrize(
+    "stub_stat_crtime", [True, False], indirect=["stub_stat_crtime"]
+)
+def test_get_path_oob_move_nested(
+    fid_manager, old_path, new_path, stub_stat_crtime, fs_helpers
+):
     old_test_path = "test_path"
     new_test_path = os.path.join(new_path, "test_path")
     fs_helpers.touch(old_test_path)
@@ -435,9 +454,17 @@ def test_get_path_oob_move_nested(fid_manager, old_path, new_path, stub_stat_crt
 
 # move file into directory within an indexed-but-moved directory
 # this test should work regardless of whether crtime is supported on platform
-@pytest.mark.parametrize("stub_stat_crtime", [True, False], indirect=["stub_stat_crtime"])
+@pytest.mark.parametrize(
+    "stub_stat_crtime", [True, False], indirect=["stub_stat_crtime"]
+)
 def test_get_path_oob_move_deeply_nested(
-    fid_manager, old_path, new_path, old_path_child, new_path_child, stub_stat_crtime, fs_helpers
+    fid_manager,
+    old_path,
+    new_path,
+    old_path_child,
+    new_path_child,
+    stub_stat_crtime,
+    fs_helpers,
 ):
     old_test_path = "test_path"
     new_test_path = os.path.join(new_path_child, "test_path")
@@ -594,24 +621,35 @@ def test_save(any_fid_manager, test_path, fs_helpers):
 
 
 @pytest.mark.parametrize(
-    "db_journal_mode", ["invalid", None, "DELETE", "TRUNCATE", "PERSIST", "MEMORY", "WAL", "OFF"]
+    "db_journal_mode",
+    ["invalid", None, "DELETE", "TRUNCATE", "PERSIST", "MEMORY", "WAL", "OFF"],
 )
-def test_db_journal_mode(any_fid_manager_class, fid_db_path, jp_root_dir, db_journal_mode):
+def test_db_journal_mode(
+    any_fid_manager_class, fid_db_path, jp_root_dir, db_journal_mode
+):
     if db_journal_mode == "invalid":  # test invalid
         with pytest.raises(TraitError, match=" must be one of "):
             any_fid_manager_class(
-                db_path=fid_db_path, root_dir=str(jp_root_dir), db_journal_mode=db_journal_mode
+                db_path=fid_db_path,
+                root_dir=str(jp_root_dir),
+                db_journal_mode=db_journal_mode,
             )
     else:
         if not db_journal_mode:  # test correct defaults
             expected_journal_mode = (
-                "WAL" if any_fid_manager_class.__name__ == "LocalFileIdManager" else "DELETE"
+                "WAL"
+                if any_fid_manager_class.__name__ == "LocalFileIdManager"
+                else "DELETE"
             )
-            fid_manager = any_fid_manager_class(db_path=fid_db_path, root_dir=str(jp_root_dir))
+            fid_manager = any_fid_manager_class(
+                db_path=fid_db_path, root_dir=str(jp_root_dir)
+            )
         else:  # test any valid value
             expected_journal_mode = db_journal_mode
             fid_manager = any_fid_manager_class(
-                db_path=fid_db_path, root_dir=str(jp_root_dir), db_journal_mode=db_journal_mode
+                db_path=fid_db_path,
+                root_dir=str(jp_root_dir),
+                db_journal_mode=db_journal_mode,
             )
 
         cursor = fid_manager.con.execute("PRAGMA journal_mode")

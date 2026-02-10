@@ -1,11 +1,15 @@
 import os
 import shutil
 from pathlib import Path
-from typing import Any, Dict, Generator, Type, Union
+from typing import Any, Dict, Generator, Type
 
 import pytest
 
-from jupyter_server_fileid.manager import ArbitraryFileIdManager, BaseFileIdManager, LocalFileIdManager
+from jupyter_server_fileid.manager import (
+    ArbitraryFileIdManager,
+    BaseFileIdManager,
+    LocalFileIdManager,
+)
 
 
 @pytest.fixture
@@ -42,9 +46,13 @@ def fid_manager(fid_db_path: str, jp_root_dir: Path) -> LocalFileIdManager:
 
 
 @pytest.fixture
-def arbitrary_fid_manager(fid_db_path: str, jp_root_dir: Path) -> ArbitraryFileIdManager:
+def arbitrary_fid_manager(
+    fid_db_path: str, jp_root_dir: Path
+) -> ArbitraryFileIdManager:
     """Fixture returning a test-configured instance of `ArbitraryFileIdManager`."""
-    arbitrary_fid_manager = ArbitraryFileIdManager(db_path=fid_db_path, root_dir=str(jp_root_dir))
+    arbitrary_fid_manager = ArbitraryFileIdManager(
+        db_path=fid_db_path, root_dir=str(jp_root_dir)
+    )
     arbitrary_fid_manager.con.execute("PRAGMA journal_mode = OFF")
     return arbitrary_fid_manager
 

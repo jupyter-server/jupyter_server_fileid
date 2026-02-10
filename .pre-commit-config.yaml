@@ -1,6 +1,6 @@
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.6.0
+    rev: v6.0.0
     hooks:
       - id: end-of-file-fixer
       - id: check-case-conflict
@@ -15,20 +15,17 @@ repos:
       - id: check-builtin-literals
       - id: trailing-whitespace
 
-  - repo: https://github.com/psf/black
-    rev: 24.4.0
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.0
     hooks:
-      - id: black
-
-  - repo: https://github.com/PyCQA/isort
-    rev: 5.13.2
-    hooks:
-      - id: isort
-        args: ["--profile", "black"]
-        files: \.py$
+      # Run the linter
+      - id: ruff
+        args: [--fix]
+      # Run the formatter
+      - id: ruff-format
 
   - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.9.0
+    rev: v1.19.1
     hooks:
       - id: mypy
         args: [--ignore-missing-imports]
@@ -38,22 +35,8 @@ repos:
           - jupyter-core>=4.12
           - jupyter-server>=2.10
 
-  - repo: https://github.com/asottile/pyupgrade
-    rev: v3.15.2
-    hooks:
-      - id: pyupgrade
-        args: [--py37-plus]
-
-  - repo: https://github.com/john-hen/Flake8-pyproject
-    rev: 1.2.3
-    hooks:
-      - id: Flake8-pyproject
-        alias: flake8
-        additional_dependencies:
-          ["flake8-bugbear==22.6.22", "flake8-implicit-str-concat==0.2.0"]
-
   - repo: https://github.com/python-jsonschema/check-jsonschema
-    rev: 0.28.2
+    rev: 0.36.1
     hooks:
       - id: check-github-workflows
         stages: [manual]

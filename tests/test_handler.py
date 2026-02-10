@@ -53,14 +53,14 @@ async def test_file_path_handler(jp_fetch, file_id_extension):
 
 async def test_missing_query_param_in_id_handler(jp_fetch):
     with pytest.raises(HTTPClientError) as err:
-        response = await jp_fetch("api/fileid/id")
+        await jp_fetch("api/fileid/id")
 
     assert err.value.code == 400
 
 
 async def test_missing_query_param_in_path_handler(jp_fetch):
     with pytest.raises(HTTPClientError) as err:
-        response = await jp_fetch("api/fileid/path")
+        await jp_fetch("api/fileid/path")
 
     assert err.value.code == 400
 
