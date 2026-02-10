@@ -23,8 +23,8 @@ classifiers = [
     "Framework :: Jupyter",
 ]
 dependencies = [
-    "jupyter_server>=1.15, <3",
-    "jupyter_events>=0.5.0"
+    "jupyter_server>=2.10, <3",
+    "jupyter_events>=0.9.0"
 ]
 
 [project.optional-dependencies]
@@ -32,7 +32,7 @@ test = [
   "pytest",
   "pytest-cov",
   "pytest-jupyter",
-  "jupyter_server[test]>=1.15, <3"
+  "jupyter_server[test]>=2.10, <3"
 ]
 
 cli = [
