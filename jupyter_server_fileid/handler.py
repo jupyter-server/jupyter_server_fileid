@@ -60,4 +60,6 @@ class FilePathHandler(BaseHandler):
                 )
             self.write(json_encode({"id": id, "path": path}))
         except web.MissingArgumentError:
-            raise web.HTTPError(400, log_message="'id' parameter was not provided in the request.")
+            raise web.HTTPError(
+                400, log_message="'id' parameter was not provided in the request."
+            )

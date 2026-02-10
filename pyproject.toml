@@ -77,6 +77,8 @@ strict_equality = true
 warn_unused_configs = true
 warn_unused_ignores = true
 warn_redundant_casts = true
+ignore_missing_imports = false
+
 
 [tool.hatch.version]
 path = "jupyter_server_fileid/__init__.py"
