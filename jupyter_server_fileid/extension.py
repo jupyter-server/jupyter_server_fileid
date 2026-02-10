@@ -21,11 +21,11 @@ class FileIdExtension(ExtensionApp):
         default_value=ArbitraryFileIdManager,
     )
 
-    file_id_manager = Instance(
+    file_id_manager = Instance(  # type: ignore[call-overload]
         klass=BaseFileIdManager, help="An instance of the File ID manager.", allow_none=True
     )
 
-    handlers: List[Tuple[str, type]] = [
+    handlers: List[Tuple[str, type]] = [  # type: ignore[assignment]
         ("/api/fileid/id", FileIDHandler),
         ("/api/fileid/path", FilePathHandler),
     ]

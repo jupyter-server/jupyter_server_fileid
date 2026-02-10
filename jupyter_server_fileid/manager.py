@@ -5,11 +5,15 @@ import stat
 import time
 import uuid
 from abc import ABC, ABCMeta, abstractmethod
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Callable, Dict, Iterator, Optional, Tuple, TypeVar
+from sqlite3 import Connection
 
 from jupyter_core.paths import jupyter_data_dir
 from traitlets import TraitError, Unicode, default, validate
 from traitlets.config.configurable import LoggingConfigurable
+from traitlets.traitlets import MetaHasTraits
+
+F = TypeVar("F", bound=Callable[..., Any])
 
 
 class StatStruct:
@@ -23,13 +27,13 @@ class StatStruct:
 default_db_path = os.path.join(jupyter_data_dir(), "file_id_manager.db")
 
 
-def log(log_before, log_after):
+def log(log_before: Callable[..., str], log_after: Callable[..., str]) -> Callable[..., Any]:
     """Decorator that accepts two functions which build a log string to be
     logged to INFO before and after the target method executes. The functions
     are passed all the arguments that the method was passed."""
 
-    def decorator(method):
-        def wrapped(self, *args, **kwargs):
+    def decorator(method: Callable[..., Any]) -> Callable[..., Any]:
+        def wrapped(self: Any, *args: Any, **kwargs: Any) -> Any:
             self.log.info(log_before(self, *args, **kwargs))
             ret = method(self, *args, **kwargs)
             self.log.info(log_after(self, *args, **kwargs))
@@ -40,7 +44,7 @@ def log(log_before, log_after):
     return decorator
 
 
-class FileIdManagerMeta(ABCMeta, type(LoggingConfigurable)):  # type: ignore
+class FileIdManagerMeta(ABCMeta, MetaHasTraits):
     pass
 
 
@@ -50,10 +54,11 @@ class BaseFileIdManager(ABC, LoggingConfigurable, metaclass=FileIdManagerMeta):
     managers should inherit from this class.
     """
 
+    con: Connection
+
     root_dir = Unicode(
         help="The root directory being served by Jupyter server.",
         config=False,
-        allow_none=True,
     )
 
     db_path = Unicode(
@@ -67,7 +72,7 @@ class BaseFileIdManager(ABC, LoggingConfigurable, metaclass=FileIdManagerMeta):
     )
 
     @validate("db_path")
-    def _validate_db_path(self, proposal):
+    def _validate_db_path(self, proposal: Dict[str, Any]) -> str:
         db_path = proposal["value"]
         if db_path == ":memory:" or os.path.isabs(db_path):
             return db_path
@@ -85,7 +90,7 @@ class BaseFileIdManager(ABC, LoggingConfigurable, metaclass=FileIdManagerMeta):
     )
 
     @validate("db_journal_mode")
-    def _validate_db_journal_mode(self, proposal):
+    def _validate_db_journal_mode(self, proposal: Dict[str, Any]) -> str:
         candidate_value = proposal["value"]
         if candidate_value is None or candidate_value.upper() not in self.JOURNAL_MODES:
             raise TraitError(
@@ -239,7 +244,7 @@ class ArbitraryFileIdManager(BaseFileIdManager):
     """
 
     @validate("root_dir")
-    def _validate_root_dir(self, proposal):
+    def _validate_root_dir(self, proposal: Dict[str, Any]) -> str:
         # Convert root_dir to an api path, since that's essentially what we persist.
         if proposal["value"] is None:
             return ""
@@ -248,10 +253,10 @@ class ArbitraryFileIdManager(BaseFileIdManager):
         return normalized_content_root
 
     @default("db_journal_mode")
-    def _default_db_journal_mode(self):
+    def _default_db_journal_mode(self) -> str:
         return "DELETE"
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
         # pass args and kwargs to parent Configurable
         super().__init__(*args, **kwargs)
         # initialize instance attrs
@@ -276,13 +281,13 @@ class ArbitraryFileIdManager(BaseFileIdManager):
         self.con.commit()
 
     @staticmethod
-    def _normalize_separators(path):
+    def _normalize_separators(path: str) -> str:
         """Replaces backslashes with forward slashes, removing adjacent slashes."""
 
         parts = path.strip("\\").split("\\")
         return "/".join(parts)
 
-    def _normalize_path(self, path):
+    def _normalize_path(self, path: str) -> str:
         """Accepts an API path and returns a "persistable" path, i.e. one prefixed
         by root_dir that can then be persisted in a format relative to the implementation."""
         # use commonprefix instead of commonpath, since root_dir may not be a
@@ -313,7 +318,7 @@ class ArbitraryFileIdManager(BaseFileIdManager):
     def _create(self, path: str) -> str:
         path = self._normalize_path(path)
         row = self.con.execute("SELECT id FROM Files WHERE path = ?", (path,)).fetchone()
-        existing_id = row and row[0]
+        existing_id: Optional[str] = row and row[0]
 
         if existing_id:
             return existing_id
@@ -338,12 +343,12 @@ class ArbitraryFileIdManager(BaseFileIdManager):
         path = row and row[0]
         return self._from_normalized_path(path)
 
-    def move(self, old_path: str, new_path: str) -> None:
+    def move(self, old_path: str, new_path: str) -> Optional[str]:
         with self.con:
             old_path = self._normalize_path(old_path)
             new_path = self._normalize_path(new_path)
             row = self.con.execute("SELECT id FROM Files WHERE path = ?", (old_path,)).fetchone()
-            id = row and row[0]
+            id: Optional[str] = row and row[0]
 
             if id:
                 self.con.execute("UPDATE Files SET path = ? WHERE path = ?", (new_path, old_path))
@@ -371,7 +376,7 @@ class ArbitraryFileIdManager(BaseFileIdManager):
             self._delete_recursive(path, posixpath)
 
     def save(self, path: str) -> None:
-        return
+        return None
 
     def get_handlers_by_action(self) -> Dict[str, Optional[Callable[[Dict[str, Any]], Any]]]:
         return {
@@ -382,7 +387,7 @@ class ArbitraryFileIdManager(BaseFileIdManager):
             "delete": lambda data: self.delete(data["path"]),
         }
 
-    def __del__(self):
+    def __del__(self) -> None:
         """Cleans up `ArbitraryFileIdManager` by committing any pending
         transactions and closing the connection."""
         if hasattr(self, "con"):
@@ -413,7 +418,7 @@ class LocalFileIdManager(BaseFileIdManager):
     """
 
     @validate("root_dir")
-    def _validate_root_dir(self, proposal):
+    def _validate_root_dir(self, proposal: Dict[str, Any]) -> str:
         if proposal["value"] is None:
             raise TraitError(f"LocalFileIdManager : {proposal['trait'].name} must not be None")
         if not os.path.isabs(proposal["value"]):
@@ -423,10 +428,10 @@ class LocalFileIdManager(BaseFileIdManager):
         return proposal["value"]
 
     @default("db_journal_mode")
-    def _default_db_journal_mode(self):
+    def _default_db_journal_mode(self) -> str:
         return "WAL"
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
         # pass args and kwargs to parent Configurable
         super().__init__(*args, **kwargs)
         # initialize instance attrs
@@ -460,7 +465,7 @@ class LocalFileIdManager(BaseFileIdManager):
         self.con.execute("CREATE INDEX IF NOT EXISTS ix_Files_is_dir ON Files (is_dir)")
         self.con.commit()
 
-    def _normalize_path(self, path):
+    def _normalize_path(self, path: str) -> str:
         """Accepts an API path and returns a filesystem path, i.e. one prefixed by root_dir."""
         if os.path.commonprefix([self.root_dir, path]) != self.root_dir:
             path = os.path.join(self.root_dir, path)
@@ -487,20 +492,24 @@ class LocalFileIdManager(BaseFileIdManager):
 
         return relpath
 
-    def _index_all(self):
+    def _index_all(self) -> None:
         """Recursively indexes all directories under the server root."""
-        self._index_dir_recursively(self.root_dir, self._stat(self.root_dir))
+        stat_result = self._stat(self.root_dir)
+        if stat_result is not None:
+            self._index_dir_recursively(self.root_dir, stat_result)
 
-    def _index_dir_recursively(self, dir_path, stat_info):
+    def _index_dir_recursively(self, dir_path: str, stat_info: "StatStruct") -> None:
         """Recursively indexes all directories under a given path."""
         self.index(dir_path, stat_info=stat_info, commit=False)
 
         with os.scandir(dir_path) as scan_iter:
             for entry in scan_iter:
                 if entry.is_dir():
-                    self._index_dir_recursively(entry.path, self._stat(entry.path))
+                    entry_stat = self._stat(entry.path)
+                    if entry_stat is not None:
+                        self._index_dir_recursively(entry.path, entry_stat)
 
-    def _sync_all(self):
+    def _sync_all(self) -> None:
         """
         Syncs Files table with the filesystem and ensures that the correct path
         is associated with each file ID. Does so by iterating through all
@@ -556,7 +565,7 @@ class LocalFileIdManager(BaseFileIdManager):
 
         self._last_sync = now
 
-    def _sync_dir(self, dir_path):
+    def _sync_dir(self, dir_path: str) -> None:
         """
         Syncs the contents of a directory. If a child directory is dirty because
         it is unindexed, then the contents of that child directory are synced.
@@ -571,6 +580,8 @@ class LocalFileIdManager(BaseFileIdManager):
         with os.scandir(dir_path) as scan_iter:
             for entry in scan_iter:
                 stat_info = self._stat(entry.path)
+                if stat_info is None:
+                    continue
                 id = self._sync_file(entry.path, stat_info)
 
                 # if entry is unindexed directory, create new record and sync
@@ -581,7 +592,7 @@ class LocalFileIdManager(BaseFileIdManager):
 
         scan_iter.close()
 
-    def _sync_file(self, path, stat_info):
+    def _sync_file(self, path: str, stat_info: "StatStruct") -> Optional[str]:
         """
         Syncs the file at `path` with the Files table by detecting whether the
         file was previously indexed but moved. Updates the record with the new
@@ -637,7 +648,7 @@ class LocalFileIdManager(BaseFileIdManager):
 
         return id
 
-    def _parse_raw_stat(self, raw_stat):
+    def _parse_raw_stat(self, raw_stat: os.stat_result) -> "StatStruct":
         """Accepts an `os.stat_result` object and returns a `StatStruct`
         object."""
         stat_info = StatStruct()
@@ -655,7 +666,7 @@ class LocalFileIdManager(BaseFileIdManager):
 
         return stat_info
 
-    def _stat(self, path):
+    def _stat(self, path: str) -> Optional["StatStruct"]:
         """Returns stat info on a path in a StatStruct object. Returns None if
         file does not exist at path."""
         try:
@@ -665,7 +676,7 @@ class LocalFileIdManager(BaseFileIdManager):
 
         return self._parse_raw_stat(raw_stat)
 
-    def _create(self, path, stat_info):
+    def _create(self, path: str, stat_info: "StatStruct") -> str:
         """Creates a record given its path and stat info. Returns the new file
         ID.
 
@@ -676,7 +687,8 @@ class LocalFileIdManager(BaseFileIdManager):
         have a unique `ino`.
         """
         # If the path exists
-        existing_id, ino = None, None
+        existing_id: Optional[str] = None
+        ino: Optional[int] = None
         row = self.con.execute("SELECT id, ino FROM Files WHERE path = ?", (path,)).fetchone()
         if row:
             existing_id, ino = row
@@ -693,7 +705,9 @@ class LocalFileIdManager(BaseFileIdManager):
         )
         return id
 
-    def _update(self, id, stat_info=None, path=None):
+    def _update(
+        self, id: str, stat_info: Optional["StatStruct"] = None, path: Optional[str] = None
+    ) -> None:
         """Updates a record given its file ID and stat info.
 
         Notes
@@ -729,7 +743,9 @@ class LocalFileIdManager(BaseFileIdManager):
             )
             return
 
-    def index(self, path, stat_info=None, commit=True):
+    def index(
+        self, path: str, stat_info: Optional["StatStruct"] = None, commit: bool = True
+    ) -> Optional[str]:
         """Returns the file ID for the file at `path`, creating a new file ID if
         one does not exist. Returns None only if file does not exist at path."""
         with self.con:
@@ -751,7 +767,7 @@ class LocalFileIdManager(BaseFileIdManager):
             id = self._create(path, stat_info)
             return id
 
-    def get_id(self, path):
+    def get_id(self, path: str) -> Optional[str]:
         """Retrieves the file ID associated with a file path. Returns None if
         the file has not yet been indexed or does not exist at the given
         path."""
@@ -765,7 +781,7 @@ class LocalFileIdManager(BaseFileIdManager):
             id = self._sync_file(path, stat_info)
             return id
 
-    def get_path(self, id):
+    def get_path(self, id: str) -> Optional[str]:
         """Retrieves the file path associated with a file ID. The file path is
         relative to `self.root_dir`. Returns None if the ID does not
         exist in the Files table, if the path no longer has a
@@ -805,7 +821,7 @@ class LocalFileIdManager(BaseFileIdManager):
         lambda self, old_path, new_path: f"Updating index following move from {old_path} to {new_path}.",
         lambda self, old_path, new_path: f"Successfully updated index following move from {old_path} to {new_path}.",
     )
-    def move(self, old_path, new_path):
+    def move(self, old_path: str, new_path: str) -> Optional[str]:
         """Handles file moves by updating the file path of the associated file
         ID.  Returns the file ID. Returns None if file does not exist at new_path."""
         with self.con:
@@ -849,7 +865,7 @@ class LocalFileIdManager(BaseFileIdManager):
         lambda self, from_path, to_path: f"Indexing {to_path} following copy from {from_path}.",
         lambda self, from_path, to_path: f"Successfully indexed {to_path} following copy from {from_path}.",
     )
-    def copy(self, from_path, to_path):
+    def copy(self, from_path: str, to_path: str) -> Optional[str]:
         """Handles file copies by creating a new record in the Files table.
         Returns the file ID associated with `new_path`. Also indexes `old_path`
         if record does not exist in Files table. TODO: emit to event bus to
@@ -869,7 +885,7 @@ class LocalFileIdManager(BaseFileIdManager):
         lambda self, path: f"Deleting index at {path}.",
         lambda self, path: f"Successfully deleted index at {path}.",
     )
-    def delete(self, path):
+    def delete(self, path: str) -> None:
         """Handles file deletions by deleting the associated record in the File
         table. Returns None."""
         with self.con:
@@ -880,7 +896,7 @@ class LocalFileIdManager(BaseFileIdManager):
 
             self.con.execute("DELETE FROM Files WHERE path = ?", (path,))
 
-    def save(self, path):
+    def save(self, path: str) -> None:
         """Handles file saves (edits) by updating recorded stat info.
 
         Notes
@@ -896,6 +912,8 @@ class LocalFileIdManager(BaseFileIdManager):
 
             # look up record by ino and path
             stat_info = self._stat(path)
+            if stat_info is None:
+                return
             row = self.con.execute(
                 "SELECT id FROM Files WHERE ino = ? AND path = ?", (stat_info.ino, path)
             ).fetchone()
@@ -916,7 +934,7 @@ class LocalFileIdManager(BaseFileIdManager):
             "delete": lambda data: self.delete(data["path"]),
         }
 
-    def __del__(self):
+    def __del__(self) -> None:
         """Cleans up `LocalFileIdManager` by committing any pending transactions and
         closing the connection."""
         if hasattr(self, "con"):
