@@ -11,7 +11,9 @@ class BaseHandler(APIHandler):
 
     @property
     def file_id_manager(self) -> BaseFileIdManager:
-        return self.settings.get("file_id_manager")
+        manager = self.settings.get("file_id_manager")
+        assert isinstance(manager, BaseFileIdManager)
+        return manager
 
 
 class FileIDHandler(BaseHandler):
@@ -19,7 +21,7 @@ class FileIDHandler(BaseHandler):
 
     @web.authenticated
     @authorized
-    def get(self):
+    def get(self) -> None:
         try:
             path = self.get_argument("path")
             id = self.file_id_manager.get_id(path)
@@ -43,7 +45,7 @@ class FilePathHandler(BaseHandler):
 
     @web.authenticated
     @authorized
-    def get(self):
+    def get(self) -> None:
         try:
             id = self.get_argument("id")
             path = self.file_id_manager.get_path(id)
