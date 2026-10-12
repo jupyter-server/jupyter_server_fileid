@@ -21,7 +21,7 @@ jobs:
           - ubuntu-latest
           - windows-latest
           - macos-latest
-        python-version: ["3.9", "3.10", "3.11", "3.12", "3.13", "3.14"]
+        python-version: ["3.11", "3.12", "3.13", "3.14", "3.15"]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -76,7 +76,7 @@ jobs:
       - name: Base Setup
         uses: jupyterlab/maintainer-tools/.github/actions/base-setup@v1
         with:
-          python_version: "3.9"
+          python_version: "3.11"
           dependency_type: minimum
       - name: Install
         run: pip install -e ".[test]"
