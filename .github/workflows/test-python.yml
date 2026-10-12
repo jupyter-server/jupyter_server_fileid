@@ -37,12 +37,12 @@ jobs:
       - name: Run tests
         if: ${{ !startsWith(matrix.python-version, 'pypy') && !startsWith(matrix.os, 'windows') }}
         run: |
-          args="-vv --cov jupyter_server_fileid --cov-branch --cov-report term-missing:skip-covered --cov-report xml"
+          args="-vv -W error::DeprecationWarning --cov jupyter_server_fileid --cov-branch --cov-report term-missing:skip-covered --cov-report xml"
           python -m pytest $args --cov-fail-under 88 || python -m pytest $args --lf
       - name: Run the tests on pypy and windows
         if: ${{ startsWith(matrix.python-version, 'pypy') || startsWith(matrix.os, 'windows') }}
         run: |
-          python -m pytest -vv || python -m pytest -vv --lf
+          python -m pytest -vv -W error::DeprecationWarning || python -m pytest -vv -W error::DeprecationWarning --lf
       - name: Coverage
         run: |
           codecov
