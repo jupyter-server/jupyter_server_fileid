@@ -70,8 +70,7 @@ def new_path_grandchild(new_path_child):
 
 
 def _normalize_path_local(fid_manager, path):
-    if os.path.commonprefix([fid_manager.root_dir, path]) != fid_manager.root_dir:
-        path = os.path.join(fid_manager.root_dir, path)
+    path = os.path.join(fid_manager.root_dir, path)
 
     path = os.path.normcase(path)
     path = os.path.normpath(path)
@@ -84,7 +83,8 @@ def _normalize_separators(path):
 
 
 def _normalize_path_arbitrary(fid_manager, path):
-    if posixpath.commonprefix([fid_manager.root_dir, path]) != fid_manager.root_dir:
+    root_dir = fid_manager.root_dir.rstrip("/")
+    if root_dir and path != root_dir and not path.startswith(root_dir + "/"):
         path = posixpath.join(fid_manager.root_dir, path)
 
     path = _normalize_separators(path)
@@ -655,3 +655,31 @@ def test_db_journal_mode(
         cursor = fid_manager.con.execute("PRAGMA journal_mode")
         actual_journal_mode = cursor.fetchone()
         assert actual_journal_mode[0].upper() == expected_journal_mode
+
+
+@pytest.mark.parametrize("root_dir", ["s3://bucket", "s3://bucket/", "relative", ""])
+def test_arbitrary_path_prefix_boundary(root_dir):
+    manager = ArbitraryFileIdManager(root_dir=root_dir, db_path=":memory:")
+    try:
+        path = manager._normalize_path("document.txt")
+        assert manager._normalize_path(path) == path
+        assert manager._from_normalized_path(path) == "document.txt"
+        if root_dir:
+            assert (
+                manager._from_normalized_path(root_dir.rstrip("/") + "-other/file")
+                is None
+            )
+    finally:
+        manager.con.close()
+
+
+def test_local_path_prefix_boundary(fid_manager):
+    root = fid_manager.root_dir
+    assert fid_manager._from_normalized_path(root + "-other/file") is None
+    assert (
+        fid_manager._from_normalized_path(os.path.join(root, "..", "outside")) is None
+    )
+    assert fid_manager._from_normalized_path("relative/file") is None
+    path = fid_manager._normalize_path("document.txt")
+    assert fid_manager._normalize_path(path) == path
+    assert fid_manager._from_normalized_path(path) == "document.txt"

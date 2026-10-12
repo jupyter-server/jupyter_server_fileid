@@ -309,13 +309,16 @@ class ArbitraryFileIdManager(BaseFileIdManager):
     def _normalize_path(self, path: str) -> str:
         """Accepts an API path and returns a "persistable" path, i.e. one prefixed
         by root_dir that can then be persisted in a format relative to the implementation."""
-        # use commonprefix instead of commonpath, since root_dir may not be a
-        # absolute POSIX path.
+        # URI roots need a separator boundary rather than filesystem path normalization.
 
         # norm_root_dir = self._normalize_separators(self.root_dir)
         path = self._normalize_separators(path)
         root_dir = self.root_dir or ""
-        if posixpath.commonprefix([root_dir, path]) != root_dir:
+        if (
+            root_dir
+            and path != root_dir.rstrip("/")
+            and not path.startswith(root_dir.rstrip("/") + "/")
+        ):
             path = posixpath.join(root_dir, path)
 
         return path
@@ -330,7 +333,11 @@ class ArbitraryFileIdManager(BaseFileIdManager):
         # Convert root_dir to an api path, since that's essentially what we persist.
         # norm_root_dir = self._normalize_separators(self.root_dir)
         root_dir = self.root_dir or ""
-        if posixpath.commonprefix([root_dir, path]) != root_dir:
+        if (
+            root_dir
+            and path != root_dir.rstrip("/")
+            and not path.startswith(root_dir.rstrip("/") + "/")
+        ):
             return None
 
         relpath = posixpath.relpath(path, root_dir)
@@ -501,8 +508,8 @@ class LocalFileIdManager(BaseFileIdManager):
     def _normalize_path(self, path: str) -> str:
         """Accepts an API path and returns a filesystem path, i.e. one prefixed by root_dir."""
         assert self.root_dir is not None  # Validated in _validate_root_dir
-        if os.path.commonprefix([self.root_dir, path]) != self.root_dir:
-            path = os.path.join(self.root_dir, path)
+        # join preserves absolute paths and prefixes relative API paths.
+        path = os.path.join(self.root_dir, path)
 
         path = os.path.normcase(path)
         path = os.path.normpath(path)
@@ -517,8 +524,13 @@ class LocalFileIdManager(BaseFileIdManager):
             return None
 
         assert self.root_dir is not None  # Validated in _validate_root_dir
-        norm_root_dir = os.path.normcase(self.root_dir)
-        if os.path.commonprefix([norm_root_dir, path]) != norm_root_dir:
+        norm_root_dir = os.path.normcase(os.path.normpath(self.root_dir))
+        path = os.path.normcase(os.path.normpath(path))
+        try:
+            if os.path.commonpath([norm_root_dir, path]) != norm_root_dir:
+                return None
+        except ValueError:
+            # Relative paths and paths on another Windows drive are outside the root.
             return None
 
         relpath = os.path.relpath(path, norm_root_dir)
