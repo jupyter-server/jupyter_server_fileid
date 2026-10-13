@@ -2,6 +2,30 @@
 
 <!-- <START NEW CHANGELOG ENTRY> -->
 
+## 0.10.0
+
+([Full Changelog](https://github.com/jupyter-server/jupyter_server_fileid/compare/v0.9.3...a1cd251dadc8372da82c93c5aaa26c89498f01c9))
+
+### Maintenance and upkeep improvements
+
+### Other merged PRs
+
+- Drop Python 3.10 and add Python 3.15 [#88](https://github.com/jupyter-server/jupyter_server_fileid/pull/88) ([@davidbrochart](https://github.com/davidbrochart), [@dlqqq](https://github.com/dlqqq))
+- fix types, make pre-commit actually check types, and make root_dir ne… [#87](https://github.com/jupyter-server/jupyter_server_fileid/pull/87) ([@Carreau](https://github.com/Carreau))
+- some type annotations [#86](https://github.com/jupyter-server/jupyter_server_fileid/pull/86) ([@Carreau](https://github.com/Carreau))
+- Bump testing to 3.14, and drop Python up to 3.8 included. [#85](https://github.com/jupyter-server/jupyter_server_fileid/pull/85) ([@Carreau](https://github.com/Carreau))
+
+### Contributors to this release
+
+The following people contributed discussions, new ideas, code and documentation contributions, and review.
+See [our definition of contributors](https://github-activity.readthedocs.io/en/latest/use/#how-does-this-tool-define-contributions-in-the-reports).
+
+([GitHub contributors page for this release](https://github.com/jupyter-server/jupyter_server_fileid/graphs/contributors?from=2024-09-06&to=2026-10-13&type=c))
+
+@Carreau ([activity](https://github.com/search?q=repo%3Ajupyter-server%2Fjupyter_server_fileid+involves%3ACarreau+updated%3A2024-09-06..2026-10-13&type=Issues)) | @davidbrochart ([activity](https://github.com/search?q=repo%3Ajupyter-server%2Fjupyter_server_fileid+involves%3Adavidbrochart+updated%3A2024-09-06..2026-10-13&type=Issues)) | @dlqqq ([activity](https://github.com/search?q=repo%3Ajupyter-server%2Fjupyter_server_fileid+involves%3Adlqqq+updated%3A2024-09-06..2026-10-13&type=Issues))
+
+<!-- <END NEW CHANGELOG ENTRY> -->
+
 ## 0.9.3
 
 ([Full Changelog](https://github.com/jupyter-server/jupyter_server_fileid/compare/v0.9.2...7ee71f63fd6fce6535f8f99f9d47199cd934bb31))
@@ -15,8 +39,6 @@
 ([GitHub contributors page for this release](https://github.com/jupyter-server/jupyter_server_fileid/graphs/contributors?from=2024-04-18&to=2024-09-06&type=c))
 
 [@davidbrochart](https://github.com/search?q=repo%3Ajupyter-server%2Fjupyter_server_fileid+involves%3Adavidbrochart+updated%3A2024-04-18..2024-09-06&type=Issues)
-
-<!-- <END NEW CHANGELOG ENTRY> -->
 
 ## 0.9.2
 
