@@ -21,7 +21,7 @@ jobs:
           - ubuntu-latest
           - windows-latest
           - macos-latest
-        python-version: ["3.9", "3.10", "3.11", "3.12", "3.13", "3.14"]
+        python-version: ["3.11", "3.12", "3.13", "3.14", "3.15"]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -37,12 +37,12 @@ jobs:
       - name: Run tests
         if: ${{ !startsWith(matrix.python-version, 'pypy') && !startsWith(matrix.os, 'windows') }}
         run: |
-          args="-vv --cov jupyter_server_fileid --cov-branch --cov-report term-missing:skip-covered --cov-report xml"
+          args="-vv -W error::DeprecationWarning --cov jupyter_server_fileid --cov-branch --cov-report term-missing:skip-covered --cov-report xml"
           python -m pytest $args --cov-fail-under 88 || python -m pytest $args --lf
       - name: Run the tests on pypy and windows
         if: ${{ startsWith(matrix.python-version, 'pypy') || startsWith(matrix.os, 'windows') }}
         run: |
-          python -m pytest -vv || python -m pytest -vv --lf
+          python -m pytest -vv -W error::DeprecationWarning || python -m pytest -vv -W error::DeprecationWarning --lf
       - name: Coverage
         run: |
           codecov
@@ -76,7 +76,7 @@ jobs:
       - name: Base Setup
         uses: jupyterlab/maintainer-tools/.github/actions/base-setup@v1
         with:
-          python_version: "3.9"
+          python_version: "3.11"
           dependency_type: minimum
       - name: Install
         run: pip install -e ".[test]"
